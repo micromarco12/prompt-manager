@@ -1,7 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 require('dotenv').config();
 
@@ -25,7 +23,6 @@ async function initialiseDb() {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user'
     );
-
     CREATE TABLE IF NOT EXISTS directories (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -33,7 +30,6 @@ async function initialiseDb() {
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       is_shared BOOLEAN DEFAULT FALSE
     );
-
     CREATE TABLE IF NOT EXISTS prompts (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -49,114 +45,64 @@ async function initialiseDb() {
   console.log('✅ Database initialized');
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
-
-function makeToken(user) {
-  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-}
-
+// 🔓 BYPASS LOGIN
 function auth(req, res, next) {
-  // TEMPORARY: simulate a logged-in user
   req.user = { id: 1, email: 'demo@example.com', role: 'admin' };
   next();
 }
 
-app.post('/api/register', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+app.get('/api/directories', auth, async (req, res) => {
   try {
-    const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      'INSERT INTO users(email, password_hash) VALUES($1, $2) RETURNING *',
-      [email.toLowerCase(), hash]
+      'SELECT * FROM directories WHERE user_id = $1 OR is_shared = TRUE ORDER BY id',
+      [1]
     );
-    res.status(201).json({ token: makeToken(rows[0]), user: { id: rows[0].id, email: rows[0].email, role: rows[0].role } });
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
-  try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
-    const match = await bcrypt.compare(password, rows[0].password_hash);
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
-    res.json({ token: makeToken(rows[0]), user: { id: rows[0].id, email: rows[0].email, role: rows[0].role } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-app.get('/api/directories', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM directories WHERE user_id = $1 OR is_shared = TRUE ORDER BY id', [1]);
     res.json(rows);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.get('/api/directories', async (req, res) => {
+app.post('/api/directories', auth, async (req, res) => {
   const { name, parent_id = null, is_shared = false } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name is required' });
+  if (!name) return res.status(400).json({ error: 'Name required' });
   try {
     const { rows } = await pool.query(
-      'INSERT INTO directories(name, parent_id, user_id, is_shared) VALUES($1, $2, $3, $4) RETURNING *',
-      [name, parent_id, req.user.id, is_shared]
+      'INSERT INTO directories(name, parent_id, user_id, is_shared) VALUES($1,$2,$3,$4) RETURNING *',
+      [name, parent_id, 1, is_shared]
     );
     res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.get('/api/directories', async (req, res) => {
+app.delete('/api/directories/:id', auth, async (req, res) => {
   const { id } = req.params;
   try {
-    const { rows } = await pool.query('SELECT user_id FROM directories WHERE id = $1', [id]);
-    if (!rows.length) return res.status(404).json({ error: 'Directory not found' });
-    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
-      return res.status(403).json({ error: 'Unauthorized' });
-    await pool.query('DELETE FROM directories WHERE id = $1', [id]);
+    await pool.query('DELETE FROM directories WHERE id=$1', [id]);
     res.json({ message: 'Directory deleted' });
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.get('/api/prompts', auth, async (req, res) => {
-  const { user_only, directory } = req.query;
   try {
-    let query = `
-      SELECT p.*, u.email AS author_email FROM prompts p
-      JOIN directories d ON d.id = p.directory_id
-      JOIN users u ON u.id = p.user_id WHERE 1=1`;
-    const params = [];
-
-    if (user_only === 'true') {
-      params.push(req.user.id);
-      query += ` AND p.user_id = $${params.length}`;
-    }
-
-    if (directory) {
-      params.push(directory);
-      query += ` AND d.name = $${params.length}`;
-    }
-
-    query += ' ORDER BY p.updated_at DESC';
-    const { rows } = await pool.query(query, params);
+    const { rows } = await pool.query(
+      `SELECT p.*, u.email AS author_email FROM prompts p
+       JOIN directories d ON d.id = p.directory_id
+       JOIN users u ON u.id = p.user_id
+       WHERE p.user_id = $1 OR d.is_shared = TRUE
+       ORDER BY p.updated_at DESC`,
+      [1]
+    );
     res.json(rows);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -167,11 +113,11 @@ app.post('/api/prompts', auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'INSERT INTO prompts(title, content, tags, directory_id, user_id) VALUES($1, $2, $3, $4, $5) RETURNING *',
-      [title, content, tags, directory_id, req.user.id]
+      [title, content, tags, directory_id, 1]
     );
     res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -180,17 +126,13 @@ app.put('/api/prompts/:id', auth, async (req, res) => {
   const { id } = req.params;
   const { title, content, tags } = req.body;
   try {
-    const { rows: own } = await pool.query('SELECT * FROM prompts WHERE id = $1', [id]);
-    if (!own.length) return res.status(404).json({ error: 'Not found' });
-    if (own[0].user_id !== req.user.id && req.user.role !== 'admin')
-      return res.status(403).json({ error: 'Unauthorized' });
     const { rows } = await pool.query(
       'UPDATE prompts SET title = $1, content = $2, tags = $3, updated_at = NOW() WHERE id = $4 RETURNING *',
       [title, content, tags, id]
     );
     res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -198,14 +140,10 @@ app.put('/api/prompts/:id', auth, async (req, res) => {
 app.delete('/api/prompts/:id', auth, async (req, res) => {
   const { id } = req.params;
   try {
-    const { rows: own } = await pool.query('SELECT user_id FROM prompts WHERE id = $1', [id]);
-    if (!own.length) return res.status(404).json({ error: 'Not found' });
-    if (own[0].user_id !== req.user.id && req.user.role !== 'admin')
-      return res.status(403).json({ error: 'Unauthorized' });
-    await pool.query('DELETE FROM prompts WHERE id = $1', [id]);
+    await pool.query('DELETE FROM prompts WHERE id=$1', [id]);
     res.json({ message: 'Prompt deleted' });
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Server error' });
   }
 });
