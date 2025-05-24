@@ -108,6 +108,11 @@ app.post('/api/register', async (req, res) => {
       ['My Prompts', user.id, false]
     );
     
+    await pool.query(
+      'INSERT INTO directories (name, user_id, is_shared) VALUES ($1, $2, $3)',
+      ['Shared Prompts', user.id, true]
+    );
+    
     res.status(201).json({ message: 'User created successfully', user });
   } catch (error) {
     if (error.code === '23505') {
@@ -156,7 +161,7 @@ app.post('/api/login', async (req, res) => {
 // Get all prompts (with filtering)
 app.get('/api/prompts', authenticateToken, async (req, res) => {
   try {
-    const { directory, search, user_only } = req.query;
+    const { directory, search, user_only, directory_id } = req.query;
     let query = `
       SELECT p.*, u.email as author_email, d.name as directory_name
       FROM prompts p
@@ -177,6 +182,12 @@ app.get('/api/prompts', authenticateToken, async (req, res) => {
       paramCount++;
       query += ` AND d.name = $${paramCount}`;
       params.push(directory);
+    }
+    
+    if (directory_id) {
+      paramCount++;
+      query += ` AND p.directory_id = $${paramCount}`;
+      params.push(directory_id);
     }
 
     if (search) {
@@ -218,7 +229,7 @@ app.post('/api/prompts', authenticateToken, async (req, res) => {
 app.put('/api/prompts/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, content, tags } = req.body;
+    const { title, content, tags, directory_id } = req.body;
     
     // Check ownership or admin
     const ownership = await pool.query(
@@ -234,16 +245,89 @@ app.put('/api/prompts/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
     
-    const result = await pool.query(
-      `UPDATE prompts 
-       SET title = $1, content = $2, tags = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4
-       RETURNING *`,
-      [title, content, tags, id]
-    );
+    // Building the query dynamically based on what's provided
+    let updateQuery = 'UPDATE prompts SET updated_at = CURRENT_TIMESTAMP';
+    const params = [];
+    let paramCount = 0;
+    
+    if (title) {
+      paramCount++;
+      updateQuery += `, title = $${paramCount}`;
+      params.push(title);
+    }
+    
+    if (content) {
+      paramCount++;
+      updateQuery += `, content = $${paramCount}`;
+      params.push(content);
+    }
+    
+    if (tags) {
+      paramCount++;
+      updateQuery += `, tags = $${paramCount}`;
+      params.push(tags);
+    }
+    
+    if (directory_id) {
+      paramCount++;
+      updateQuery += `, directory_id = $${paramCount}`;
+      params.push(directory_id);
+    }
+    
+    paramCount++;
+    updateQuery += ` WHERE id = $${paramCount} RETURNING *`;
+    params.push(id);
+    
+    const result = await pool.query(updateQuery, params);
     
     res.json(result.rows[0]);
   } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Copy prompt to different directory
+app.post('/api/prompts/:id/copy', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { directory_id } = req.body;
+    
+    // Get the original prompt
+    const promptResult = await pool.query(
+      'SELECT * FROM prompts WHERE id = $1',
+      [id]
+    );
+    
+    if (promptResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Prompt not found' });
+    }
+    
+    const originalPrompt = promptResult.rows[0];
+    
+    // Check permissions - either the user owns the prompt or is an admin
+    if (originalPrompt.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    // Create a copy of the prompt in the new directory
+    const result = await pool.query(
+      `INSERT INTO prompts (title, content, directory_id, user_id, tags, is_restricted)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        originalPrompt.title + ' (Copy)',
+        originalPrompt.content,
+        directory_id,
+        req.user.id,
+        originalPrompt.tags,
+        originalPrompt.is_restricted
+      ]
+    );
+    
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -303,6 +387,103 @@ app.post('/api/directories', authenticateToken, async (req, res) => {
     
     res.status(201).json(result.rows[0]);
   } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update directory
+app.put('/api/directories/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, parent_id, is_shared } = req.body;
+    
+    // Check ownership or admin
+    const ownership = await pool.query(
+      'SELECT user_id FROM directories WHERE id = $1',
+      [id]
+    );
+    
+    if (ownership.rows.length === 0) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    
+    if (ownership.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    // Building the query dynamically based on what's provided
+    let updateQuery = 'UPDATE directories SET';
+    const params = [];
+    let paramCount = 0;
+    let isFirstParam = true;
+    
+    if (name) {
+      paramCount++;
+      updateQuery += ` name = $${paramCount}`;
+      params.push(name);
+      isFirstParam = false;
+    }
+    
+    if (parent_id !== undefined) {
+      paramCount++;
+      updateQuery += isFirstParam ? ` parent_id = $${paramCount}` : `, parent_id = $${paramCount}`;
+      params.push(parent_id);
+      isFirstParam = false;
+    }
+    
+    if (is_shared !== undefined) {
+      paramCount++;
+      updateQuery += isFirstParam ? ` is_shared = $${paramCount}` : `, is_shared = $${paramCount}`;
+      params.push(is_shared);
+    }
+    
+    paramCount++;
+    updateQuery += ` WHERE id = $${paramCount} RETURNING *`;
+    params.push(id);
+    
+    const result = await pool.query(updateQuery, params);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete directory
+app.delete('/api/directories/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { move_prompts_to } = req.query;
+    
+    // Check ownership or admin
+    const ownership = await pool.query(
+      'SELECT user_id FROM directories WHERE id = $1',
+      [id]
+    );
+    
+    if (ownership.rows.length === 0) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    
+    if (ownership.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    // If move_prompts_to is provided, move prompts to that directory
+    if (move_prompts_to) {
+      await pool.query(
+        'UPDATE prompts SET directory_id = $1 WHERE directory_id = $2',
+        [move_prompts_to, id]
+      );
+    }
+    
+    // Now delete the directory
+    await pool.query('DELETE FROM directories WHERE id = $1', [id]);
+    
+    res.json({ message: 'Directory deleted successfully' });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Server error' });
   }
 });
