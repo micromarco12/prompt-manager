@@ -796,9 +796,52 @@
                 
                 // Update directory dropdowns
                 updateDirectoryDropdowns();
+                
+                // Update directory tree in sidebar
+                updateDirectoryTree();
             } catch (error) {
                 console.error('Error loading directories:', error);
             }
+        }
+
+        // Update directory tree in sidebar
+        function updateDirectoryTree() {
+            const directoryTree = document.getElementById('directoryTree');
+            
+            // Keep the default directories
+            let html = `
+                <div class="directory-item ${currentDirectory === 'all' ? 'active' : ''}" onclick="selectDirectory(this, 'all')">
+                    <span class="directory-icon">📚</span>
+                    <span>All Prompts</span>
+                </div>
+                <div class="directory-item ${currentDirectory === 'my-prompts' ? 'active' : ''}" onclick="selectDirectory(this, 'my-prompts')">
+                    <span class="directory-icon">👤</span>
+                    <span>My Prompts</span>
+                </div>
+                <div class="directory-item ${currentDirectory === 'shared' ? 'active' : ''}" onclick="selectDirectory(this, 'shared')" 
+                     ondragover="handleDragOver(event)" 
+                     ondrop="handleDrop(event, 'shared')">
+                    <span class="directory-icon">👥</span>
+                    <span>Shared Prompts</span>
+                </div>
+            `;
+            
+            // Add custom directories
+            directories.forEach(dir => {
+                if (dir.name !== 'My Prompts' && dir.name !== 'Shared Prompts') {
+                    html += `
+                        <div class="directory-item ${currentDirectory === 'dir-' + dir.id ? 'active' : ''}" 
+                             onclick="selectDirectory(this, 'dir-${dir.id}')"
+                             ondragover="handleDragOver(event)" 
+                             ondrop="handleDrop(event, 'dir-${dir.id}')">
+                            <span class="directory-icon">📁</span>
+                            <span>${dir.name}</span>
+                        </div>
+                    `;
+                }
+            });
+            
+            directoryTree.innerHTML = html;
         }
 
         // Update directory dropdowns
@@ -1194,6 +1237,73 @@
                 }
             }
         });
+
+        // Drag and drop handlers
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)';
+        }
+
+        function handleDrop(e, targetDirectory) {
+            e.preventDefault();
+            e.currentTarget.style.background = '';
+            
+            const promptId = parseInt(e.dataTransfer.getData('promptId'));
+            const prompt = prompts.find(p => p.id === promptId);
+            
+            if (prompt && targetDirectory === 'shared') {
+                // Find the shared directory ID
+                const sharedDir = directories.find(d => d.name === 'Shared Prompts');
+                if (sharedDir) {
+                    copyPromptToShared(prompt, sharedDir.id);
+                }
+            }
+        }
+
+        // Copy prompt to shared folder
+        async function copyPromptToShared(prompt, sharedDirId) {
+            try {
+                const response = await apiCall('/api/prompts', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title: prompt.title + ' (Copy)',
+                        content: prompt.content,
+                        directory_id: sharedDirId,
+                        tags: prompt.tags || []
+                    })
+                });
+                
+                if (response.ok) {
+                    showCopySuccess();
+                    if (currentDirectory === 'shared') {
+                        await loadPrompts();
+                    }
+                } else {
+                    const error = await response.json();
+                    console.error('Error copying prompt:', error);
+                }
+            } catch (error) {
+                console.error('Error copying prompt:', error);
+            }
+        }
+
+        // Add animation keyframes for success message
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            .directory-item[ondragover]:hover {
+                background: rgba(102, 126, 234, 0.1);
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
