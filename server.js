@@ -98,9 +98,9 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.get('/api/directories', auth, async (req, res) => {
+app.get('/api/directories', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM directories WHERE user_id = $1 OR is_shared = TRUE ORDER BY id', [req.user.id]);
+    const { rows } = await pool.query('SELECT * FROM directories WHERE user_id = $1 OR is_shared = TRUE ORDER BY id', [1]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -108,7 +108,7 @@ app.get('/api/directories', auth, async (req, res) => {
   }
 });
 
-app.post('/api/directories', auth, async (req, res) => {
+app.get('/api/directories', async (req, res) => {
   const { name, parent_id = null, is_shared = false } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
   try {
@@ -123,7 +123,7 @@ app.post('/api/directories', auth, async (req, res) => {
   }
 });
 
-app.delete('/api/directories/:id', auth, async (req, res) => {
+app.get('/api/directories', async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query('SELECT user_id FROM directories WHERE id = $1', [id]);
