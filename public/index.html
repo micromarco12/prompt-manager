@@ -538,7 +538,7 @@
                 left: 0;
                 top: 0;
                 height: 100%;
-                z-index: 1000; /* Higher than prompt cards, lower than modals */
+                z-index: 1000; 
                 transform: translateX(-100%); 
             }
 
@@ -552,7 +552,6 @@
             .login-box {
                 width: 90%;
             }
-            /* Consider a hamburger menu button to toggle sidebar on mobile */
         }
         
         .notification {
@@ -882,12 +881,11 @@
             if (allPromptsItem) {
                 selectDirectory(allPromptsItem, 'all', 'All Prompts');
             } else if (directoryTreeEl.firstElementChild) {
-                 // Fallback if 'all' item isn't found by onclick string match
                  selectDirectory(directoryTreeEl.firstElementChild, 'all', 'All Prompts');
             } else {
-                currentDirectory = 'all'; // Set current directory
-                currentDirectoryDisplayEl.textContent = 'All Prompts'; // Update display
-                loadPrompts(); // Load prompts for 'all'
+                currentDirectory = 'all'; 
+                currentDirectoryDisplayEl.textContent = 'All Prompts'; 
+                loadPrompts(); 
             }
         }
         
@@ -1109,8 +1107,7 @@
                 if (currentDirectory === 'my-prompts') {
                     params.append('user_only', 'true'); 
                 } else if (currentDirectory === 'shared') {
-                    // This requires specific backend logic for 'shared scope' if not just filtering by a directory named 'Shared Prompts'
-                    // For now, we'll assume it works by convention or backend handles general access.
+                    // Future: Add specific parameter for shared scope if backend supports it
                 } else if (currentDirectory && currentDirectory.startsWith('folder-')) {
                     const folderId = currentDirectory.split('folder-')[1];
                     if (folderId) params.append('directory_id', folderId);
@@ -1141,6 +1138,7 @@
             }
         }
 
+        // MODIFIED createPromptCard to use addEventListener for buttons
         function createPromptCard(prompt) {
             const card = document.createElement('div');
             card.className = 'prompt-card';
@@ -1177,14 +1175,20 @@
             const copyBtn = document.createElement('button');
             copyBtn.className = 'prompt-action';
             copyBtn.textContent = 'Copy';
-            copyBtn.onclick = function(e) { e.stopPropagation(); copyPromptDirect(prompt.id); };
+            copyBtn.addEventListener('click', function(event) { // Using addEventListener
+                event.stopPropagation();
+                copyPromptDirect(prompt.id);
+            });
             actionsDiv.appendChild(copyBtn);
 
             if (currentUser && (prompt.user_id === currentUser.id || currentUser.role === 'admin')) {
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'prompt-action';
                 deleteBtn.textContent = 'Delete';
-                deleteBtn.onclick = function(e) { e.stopPropagation(); deletePrompt(prompt.id); };
+                deleteBtn.addEventListener('click', function(event) { // Using addEventListener
+                    event.stopPropagation();
+                    deletePrompt(prompt.id);
+                });
                 actionsDiv.appendChild(deleteBtn);
             }
             metaDiv.appendChild(dateSpan);
@@ -1273,15 +1277,13 @@
             }
         }
         
-        // Store original onclick for save buttons once DOM is ready, or ensure they are set if buttons are dynamically created.
-        // Initial assignment for statically present buttons:
         if (savePromptBtnEl) {
-            originalSavePromptBtnOnclick = savePromptBtnEl.onclick; // Store original if any
-            savePromptBtnEl.onclick = () => handleSavePrompt(false); // Set default
+            originalSavePromptBtnOnclick = savePromptBtnEl.onclick; 
+            savePromptBtnEl.onclick = () => handleSavePrompt(false); 
         }
         if (saveFolderBtnEl) {
-            originalSaveFolderBtnOnclick = saveFolderBtnEl.onclick; // Store original if any
-            saveFolderBtnEl.onclick = () => handleSaveFolder(false); // Set default
+            originalSaveFolderBtnOnclick = saveFolderBtnEl.onclick; 
+            saveFolderBtnEl.onclick = () => handleSaveFolder(false); 
         }
 
         function viewPrompt(prompt) { 
@@ -1353,10 +1355,10 @@
 
         async function deletePrompt(promptId) { 
             if (!confirm('Are you sure you want to delete this prompt?')) return;
-            console.log('Attempting to delete prompt ID:', promptId);
+            // console.log('Attempting to delete prompt ID:', promptId); // Keep for debugging if needed
             try {
                 const response = await apiCall(`/api/prompts/${promptId}`, { method: 'DELETE' });
-                console.log('Delete API response status:', response.status);
+                // console.log('Delete API response status:', response.status); // Keep for debugging
                 if (response.ok) {
                     showNotification('Prompt deleted successfully!', 'success');
                     await loadPrompts();
@@ -1371,20 +1373,19 @@
             }
         }
 
-        function searchPrompts() { // Client-side search based on currently loaded prompts
+        function searchPrompts() { 
             const searchTerm = searchInputEl.value.toLowerCase();
-            const allCards = promptGridEl.querySelectorAll('.prompt-card'); // Get all cards currently in grid
-        
-            // If you want to re-fetch from backend on every keyup, call loadPrompts() instead.
-            // This is client-side filtering of what's already loaded.
+            // This is client-side. For backend search, you'd call loadPrompts() perhaps on a button click or debounce.
+            // If you want instant backend search on keyup, call loadPrompts() here, but be mindful of API spam.
+            const allCards = promptGridEl.querySelectorAll('.prompt-card'); 
             allCards.forEach(card => {
                 const promptId = card.dataset.promptId;
-                const prompt = prompts.find(p => p.id.toString() === promptId); // Find from full loaded prompts array
+                const prompt = prompts.find(p => p.id.toString() === promptId); 
                 if (prompt) {
                     const title = prompt.title.toLowerCase();
                     const content = prompt.content.toLowerCase();
                     if (title.includes(searchTerm) || content.includes(searchTerm)) {
-                        card.style.display = ''; // Or 'block', 'grid' etc. depending on card's natural display
+                        card.style.display = ''; 
                     } else {
                         card.style.display = 'none';
                     }
