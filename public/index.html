@@ -1,305 +1,1159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Prompt Manager</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  <style>
-    /* ─── Simple dark theme ─── */
-    :root{
-      --bg:#0a0a0a; --panel:#141414; --accent:#667eea; --text:#e0e0e0;
-    }
-    *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif}
-    body{display:flex;flex-direction:column;height:100vh;background:var(--bg);color:var(--text)}
-    header{background:#000;padding:10px 20px;display:flex;justify-content:space-between;align-items:center}
-    header span:first-child{font-size:20px;font-weight:600}
-    /* layout */
-    .app{flex:1;display:flex;min-height:0}
-    aside{width:260px;background:var(--panel);padding:20px;overflow-y:auto}
-    main{flex:1;display:flex;flex-direction:column;padding:20px;overflow-y:auto}
-    /* directory tree */
-    .directory-item{display:flex;gap:8px;align-items:center;padding:8px 12px;margin-bottom:4px;border-radius:6px;cursor:pointer;transition:.2s}
-    .directory-item:hover{background:#1e1e1e}
-    .directory-item.active{background:rgba(102,126,234,.2);border-left:3px solid var(--accent)}
-    .sub-directory{margin-left:18px;margin-top:2px}
-    /* prompt cards */
-    .prompt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
-    .prompt-card{background:var(--panel);padding:14px;border-radius:8px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;transition:transform .2s;cursor:grab}
-    .prompt-card:hover{transform:translateY(-4px)}
-    .prompt-title{font-weight:600;margin-bottom:8px}
-    .prompt-actions{display:flex;gap:6px;margin-top:10px}
-    /* buttons / inputs */
-    button,input[type=submit]{background:var(--accent);border:none;border-radius:6px;color:#fff;padding:8px 12px;cursor:pointer}
-    button.small{padding:4px 6px;font-size:12px}
-    dialog{border:none;border-radius:10px;background:var(--panel);color:var(--text);padding:20px}
-    dialog input,dialog textarea,dialog select{width:100%;padding:8px;margin-bottom:12px;border:none;border-radius:6px;background:#1e1e1e;color:var(--text)}
-    .hidden{display:none}
-  </style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Login Screen */
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0a 100%);
+        }
+
+        .login-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            width: 400px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-box h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Main App */
+        .app-container {
+            display: none;
+            height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: #111111;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header h1 {
+            font-size: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .user-info {
+            padding: 15px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .user-info span {
+            font-size: 14px;
+            color: #b0b0b0;
+        }
+
+        .logout-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .new-folder-btn {
+            margin: 20px;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            color: #667eea;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .new-folder-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .directory-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .directory-item {
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .directory-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(5px);
+        }
+
+        .directory-item.active {
+            background: rgba(102, 126, 234, 0.2);
+            border-left: 3px solid #667eea;
+        }
+
+        .directory-icon {
+            font-size: 18px;
+        }
+
+        .sub-directory {
+            margin-left: 25px;
+            margin-top: 5px;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0a;
+        }
+
+        .content-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .content-header h2 {
+            font-size: 20px;
+            color: #e0e0e0;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .search-bar {
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #e0e0e0;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .search-bar input::placeholder {
+            color: #666;
+        }
+
+        /* Prompt Grid */
+        .prompt-grid {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .prompt-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .prompt-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .prompt-card:hover::before {
+            opacity: 1;
+        }
+
+        .prompt-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .prompt-card h3 {
+            margin-bottom: 10px;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .prompt-card p {
+            color: #999;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .prompt-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .prompt-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .prompt-action {
+            padding: 5px 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .prompt-action:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translate(-50%, -60%);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            font-size: 22px;
+            color: #e0e0e0;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close-modal:hover {
+            color: #e0e0e0;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-body input,
+        .modal-body textarea,
+        .modal-body select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .modal-body textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .modal-body input:focus,
+        .modal-body textarea:focus,
+        .modal-body select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .modal-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+        }
+
+        .modal-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .loading-message {
+            padding: 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100%;
+                z-index: 100;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .prompt-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <span>Prompt Manager</span>
-    <div id="userSection">
-      <span id="userEmail"></span>
-      <button onclick="logout()">Logout</button>
-    </div>
-  </header>
-
-  <!-- LOGIN (shown first) -->
-  <dialog id="loginModal" open>
-    <h2>Login</h2>
-    <input id="loginEmail" type="email"  placeholder="Email"/>
-    <input id="loginPassword" type="password" placeholder="Password"/>
-    <button onclick="login()">Login / Register</button>
-  </dialog>
-
-  <!-- MAIN-APP -->
-  <div id="appContainer" class="app hidden">
-    <aside>
-      <button style="width:100%;margin-bottom:12px" onclick="showNewFolderModal()">+ New Folder</button>
-      <div id="directoryTree"></div>
-    </aside>
-
-    <main>
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button onclick="showNewPromptModal()">+ New Prompt</button>
-        <select id="directoryFilter" onchange="changeDirectory(this.value)"></select>
-      </div>
-      <div id="promptGrid" class="prompt-grid"></div>
-    </main>
-  </div>
-
-  <!-- PROMPT MODAL -->
-  <dialog id="promptModal">
-    <h2 id="promptModalTitle">New Prompt</h2>
-    <input    id="promptTitle"    placeholder="Title"/>
-    <textarea id="promptContent"  rows="6" placeholder="Prompt text…"></textarea>
-    <select   id="promptDirectory"></select>
-    <label style="display:flex;align-items:center;gap:6px">
-      <input type="checkbox" id="promptRestricted"/> Restrict (admin)
-    </label>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="promptModal.close()">Cancel</button>
-      <button id="promptModalSave">Save</button>
-    </div>
-  </dialog>
-
-  <!-- FOLDER MODAL -->
-  <dialog id="folderModal">
-    <h2>New Folder</h2>
-    <input  id="folderName"        placeholder="Folder name"/>
-    <select id="parentDirectory"></select>
-    <label style="display:flex;align-items:center;gap:6px">
-      <input type="checkbox" id="folderShared"/> Shared
-    </label>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="folderModal.close()">Cancel</button>
-      <button onclick="createFolder()">Create</button>
-    </div>
-  </dialog>
-
-  <script>
-  /* ─────────  GLOBAL STATE  ───────── */
-  let authToken      = localStorage.getItem('token');
-  let currentUser    = JSON.parse(localStorage.getItem('user')||null);
-  let directories    = [];
-  let currentDirectory = 'all';     // 'all' | 'shared' | directoryId
-
-  /* ─────────  API HELPER  ───────── */
-  async function apiCall(url,opt={}){
-    opt.headers = opt.headers || {};
-    opt.headers['Content-Type']='application/json';
-    if(authToken) opt.headers.Authorization='Bearer '+authToken;
-    const res = await fetch(url,opt);
-    if(res.status===401 || res.status===403){ logout(); throw new Error('Auth'); }
-    return res;
-  }
-
-  /* ─────────  AUTH  ───────── */
-  async function login(){
-    const email    = loginEmail.value.trim();
-    const password = loginPassword.value.trim();
-    if(!email||!password) return alert('Email & password please');
-    const res  = await apiCall('/api/login',{method:'POST',body:JSON.stringify({email,password})});
-    const data = await res.json();
-    if(!res.ok) return alert(data.error||'Login failed');
-
-    authToken   = data.token;
-    currentUser = data.user;
-    localStorage.setItem('token',authToken);
-    localStorage.setItem('user', JSON.stringify(currentUser));
-
-    loginModal.close();
-    appContainer.classList.remove('hidden');
-    userEmail.textContent=currentUser.email;
-
-    await loadDirectories();
-    await loadPrompts();
-  }
-  function logout(){ localStorage.clear(); location.reload(); }
-
-  /* ─────────  DIRECTORY LOGIC  ───────── */
-  function buildDirTree(list,parent=null){
-    return list.filter(d=>d.parent_id===parent).map(d=>{
-      const kids=buildDirTree(list,d.id).join('');
-      return `
-        <div class="directory-item" data-id="${d.id}"
-             draggable="true" ondragover="event.preventDefault()"
-             ondrop="handleDrop(event,${d.id})"
-             onclick="selectDirectory(this,${d.id})">
-          <span class="directory-icon">${d.is_shared?'👥':'📁'}</span>
-          <span>${d.name}</span>
-          <button class="small" style="margin-left:auto"
-                  onclick="event.stopPropagation();deleteDirectory(${d.id})">🗑️</button>
-        </div>${kids?`<div class="sub-directory">${kids}</div>`:''}`;
-    });
-  }
-  function renderDirectoryTree(){
-    directoryTree.innerHTML = `
-      <div class="directory-item ${currentDirectory==='all'?'active':''}"
-           onclick="selectDirectory(this,'all')">📚 All Prompts</div>
-      ${buildDirTree(directories).join('')}
-      <div class="directory-item ${currentDirectory==='shared'?'active':''}"
-           onclick="selectDirectory(this,'shared')">👥 Shared Prompts</div>`;
-  }
-
-  async function loadDirectories(){
-    const res = await apiCall('/api/directories');
-    directories = await res.json();
-    renderDirectoryTree();
-    updateDirectoryDropdowns();
-  }
-
-  function updateDirectoryDropdowns(){
-    promptDirectory.innerHTML='';
-    parentDirectory.innerHTML='<option value="">— None —</option>';
-    directories.forEach(d=>{
-      promptDirectory.appendChild(new Option(d.name,d.id));
-      parentDirectory.appendChild(new Option(d.name,d.id));
-    });
-
-    directoryFilter.innerHTML=
-      '<option value=\"all\">All</option><option value=\"shared\">Shared</option>';
-    directories.forEach(d=>directoryFilter.appendChild(new Option(d.name,d.id)));
-    directoryFilter.value=currentDirectory;
-  }
-
-  function selectDirectory(el,id){
-    document.querySelectorAll('.directory-item').forEach(i=>i.classList.remove('active'));
-    el.classList.add('active');
-    currentDirectory=id;
-    directoryFilter.value=id;
-    loadPrompts();
-  }
-  function changeDirectory(val){
-    currentDirectory = val==='all'?'all':(val==='shared'?'shared':parseInt(val));
-    renderDirectoryTree();
-    loadPrompts();
-  }
-
-  async function createFolder(){
-    const name       = folderName.value.trim();
-    const parent_id  = parentDirectory.value || null;
-    const is_shared  = folderShared.checked;
-    if(!name) return alert('Folder name?');
-    await apiCall('/api/directories',{method:'POST',
-      body:JSON.stringify({name,parent_id,is_shared})});
-    folderModal.close();
-    await loadDirectories();
-  }
-  async function deleteDirectory(id){
-    if(!confirm('Delete this folder and everything inside?')) return;
-    await apiCall('/api/directories/'+id,{method:'DELETE'});
-    await loadDirectories();
-    loadPrompts();
-  }
-
-  /* ─────────  PROMPTS  ───────── */
-  function card(p){
-    const div=document.createElement('div');
-    div.className='prompt-card';
-    div.draggable=true;
-    div.ondragstart=e=>handleDragStart(e,p.id);
-    div.innerHTML=`
-      <div>
-        <div class="prompt-title">${p.title}</div>
-        <div style="white-space:pre-line;font-size:14px;opacity:.8">
-          ${p.content.slice(0,120)}${p.content.length>120?'…':''}
+    <!-- Login Screen -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-box">
+            <h2>Prompt Manager</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="Enter your password">
+                </div>
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+            <p style="margin-top: 20px; text-align: center; color: #666; font-size: 14px;">
+                First time? Just enter any email and password to create an account
+            </p>
         </div>
-      </div>
-      <div class="prompt-actions">
-        <button class="small" onclick="editPrompt(${p.id})">✏️</button>
-        <button class="small" onclick="deletePrompt(${p.id})">🗑️</button>
-      </div>`;
-    return div;
-  }
-  async function loadPrompts(){
-    promptGrid.textContent='Loading…';
-    const qs=new URLSearchParams();
-    if(currentDirectory==='shared') qs.append('shared_only','true');
-    else if(currentDirectory!=='all') qs.append('directory_id',currentDirectory);
-    const res = await apiCall('/api/prompts?'+qs.toString());
-    const list=await res.json();
-    promptGrid.innerHTML='';
-    list.forEach(p=>promptGrid.appendChild(card(p)));
-  }
+    </div>
 
-  async function savePrompt(id=null){
-    const body=JSON.stringify({
-      title        : promptTitle.value.trim(),
-      content      : promptContent.value.trim(),
-      directory_id : promptDirectory.value,
-      is_restricted: promptRestricted.checked
-    });
-    let res;
-    if(id){
-      res=await apiCall('/api/prompts/'+id,{method:'PUT',body});
-    }else{
-      res=await apiCall('/api/prompts',{method:'POST',body});
-    }
-    if(!res.ok) return alert('Error saving');
-    promptModal.close(); loadPrompts();
-  }
-  async function deletePrompt(id){
-    if(!confirm('Delete prompt?')) return;
-    await apiCall('/api/prompts/'+id,{method:'DELETE'});
-    loadPrompts();
-  }
+    <!-- Main App -->
+    <div class="app-container" id="appContainer">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>📝 Prompt Library</h1>
+            </div>
+            <div class="user-info">
+                <span id="userEmail">user@company.com</span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+            <button class="new-folder-btn" onclick="showNewFolderModal()">
+                <span>📁</span> New Folder
+            </button>
+            <div class="directory-tree" id="directoryTree">
+                <div class="directory-item active" onclick="selectDirectory(this, 'all')">
+                    <span class="directory-icon">📚</span>
+                    <span>All Prompts</span>
+                </div>
+                <div class="directory-item" onclick="selectDirectory(this, 'my-prompts')">
+                    <span class="directory-icon">👤</span>
+                    <span>My Prompts</span>
+                </div>
+                <div class="directory-item" onclick="selectDirectory(this, 'shared')">
+                    <span class="directory-icon">👥</span>
+                    <span>Shared Prompts</span>
+                </div>
+            </div>
+        </div>
 
-  /* Drag-and-drop move / copy */
-  let draggedPromptId=null;
-  function handleDragStart(e,id){ draggedPromptId=id; }
-  async function handleDrop(e,targetDir){
-    e.preventDefault();
-    if(!draggedPromptId) return;
-    const copy=e.ctrlKey||e.metaKey;
-    await apiCall('/api/prompts/'+draggedPromptId+'/directory',
-      {method:'PUT',body:JSON.stringify({directory_id:targetDir,copy})});
-    draggedPromptId=null; loadPrompts();
-  }
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="content-header">
+                <h2 id="currentDirectory">All Prompts</h2>
+                <div class="actions">
+                    <button class="action-btn" onclick="showNewPromptModal()">
+                        <span>➕</span> New Prompt
+                    </button>
+                </div>
+            </div>
+            <div class="search-bar">
+                <span>🔍</span>
+                <input type="text" placeholder="Search prompts..." id="searchInput" onkeyup="searchPrompts()">
+            </div>
+            <div class="prompt-grid" id="promptGrid">
+                <div class="loading-message">Loading prompts...</div>
+            </div>
+        </div>
+    </div>
 
-  /* ─────────  MODAL HELPERS  ───────── */
-  function showNewPromptModal(){
-    promptModalTitle.textContent='New Prompt';
-    promptTitle.value=''; promptContent.value=''; promptRestricted.checked=false;
-    promptModalSave.onclick=()=>savePrompt();
-    promptModal.showModal();
-  }
-  function showNewFolderModal(){
-    folderName.value=''; parentDirectory.value=''; folderShared.checked=false;
-    folderModal.showModal();
-  }
+    <!-- New Prompt Modal -->
+    <div class="modal" id="newPromptModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Prompt</h3>
+                <button class="close-modal" onclick="closeModal('newPromptModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="promptTitle" placeholder="Prompt Title">
+                <textarea id="promptContent" placeholder="Enter your prompt here..."></textarea>
+                <select id="promptDirectory">
+                    <option value="1">My Prompts</option>
+                    <option value="2">Shared Prompts</option>
+                </select>
+                <input type="text" id="promptTags" placeholder="Tags (comma separated)">
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" onclick="closeModal('newPromptModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="savePrompt()">Save Prompt</button>
+            </div>
+        </div>
+    </div>
 
-  /* ─────────  FIRST-LOAD  ───────── */
-  (async()=>{
-    if(authToken && currentUser){
-      loginModal.close();
-      appContainer.classList.remove('hidden');
-      userEmail.textContent=currentUser.email;
-      await loadDirectories(); await loadPrompts();
-    }
-  })();
-  </script>
+    <!-- New Folder Modal -->
+    <div class="modal" id="newFolderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Folder</h3>
+                <button class="close-modal" onclick="closeModal('newFolderModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="folderName" placeholder="Folder Name">
+                <select id="parentDirectory">
+                    <option value="">Root Directory</option>
+                    <option value="1">My Prompts</option>
+                    <option value="2">Shared Prompts</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="createFolder()">Create Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Prompt Modal -->
+    <div class="modal" id="viewPromptModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="viewPromptTitle">Prompt Title</h3>
+                <button class="close-modal" onclick="closeModal('viewPromptModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="viewPromptContent" style="min-height: 300px;" readonly></textarea>
+                <div style="margin-top: 15px;">
+                    <small id="viewPromptMeta" style="color: #666;"></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn secondary" onclick="copyPrompt()">Copy to Clipboard</button>
+                <button class="modal-btn primary" onclick="editPrompt()">Edit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let prompts = [];
+        let directories = [];
+        let currentDirectory = 'all';
+        let authToken = null;
+
+        // Helper function to make authenticated API calls
+        async function apiCall(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+            
+            if (!response.ok && response.status === 401) {
+                // Token expired or invalid
+                logout();
+                throw new Error('Session expired');
+            }
+            
+            return response;
+        }
+
+        // Login functionality
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                // Try to login first
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Login successful
+                    authToken = data.token;
+                    currentUser = data.user;
+                    
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    document.getElementById('userEmail').textContent = email;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'flex';
+                    
+                    // Load user data
+                    await loadDirectories();
+                    await loadPrompts();
+                } else {
+                    // If login fails, try to register
+                    const registerResponse = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    if (registerResponse.ok) {
+                        // Registration successful, now login
+                        const loginResponse = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ email, password })
+                        });
+                        
+                        const loginData = await loginResponse.json();
+                        
+                        if (loginResponse.ok) {
+                            authToken = loginData.token;
+                            currentUser = loginData.user;
+                            
+                            localStorage.setItem('token', loginData.token);
+                            localStorage.setItem('user', JSON.stringify(loginData.user));
+                            
+                            document.getElementById('userEmail').textContent = email;
+                            document.getElementById('loginScreen').style.display = 'none';
+                            document.getElementById('appContainer').style.display = 'flex';
+                            
+                            await loadDirectories();
+                            await loadPrompts();
+                        }
+                    } else {
+                        alert('Login failed. Please check your credentials.');
+                    }
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Connection error. Please try again.');
+            }
+        });
+
+        // Logout functionality
+        function logout() {
+            currentUser = null;
+            authToken = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        // Load directories
+        async function loadDirectories() {
+            try {
+                const response = await apiCall('/api/directories');
+                directories = await response.json();
+                
+                // Update directory dropdowns
+                updateDirectoryDropdowns();
+            } catch (error) {
+                console.error('Error loading directories:', error);
+            }
+        }
+
+        // Update directory dropdowns
+        function updateDirectoryDropdowns() {
+            const promptDirSelect = document.getElementById('promptDirectory');
+            promptDirSelect.innerHTML = '';
+            
+            directories.forEach(dir => {
+                const option = document.createElement('option');
+                option.value = dir.id;
+                option.textContent = dir.name;
+                promptDirSelect.appendChild(option);
+            });
+        }
+
+        // Directory selection
+        function selectDirectory(element, directory) {
+            document.querySelectorAll('.directory-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            element.classList.add('active');
+            currentDirectory = directory;
+            
+            let title = 'All Prompts';
+            switch(directory) {
+                case 'my-prompts':
+                    title = 'My Prompts';
+                    break;
+                case 'shared':
+                    title = 'Shared Prompts';
+                    break;
+            }
+            document.getElementById('currentDirectory').textContent = title;
+            loadPrompts();
+        }
+
+        // Load prompts based on current directory
+        async function loadPrompts() {
+            const promptGrid = document.getElementById('promptGrid');
+            promptGrid.innerHTML = '<div class="loading-message">Loading prompts...</div>';
+            
+            try {
+                let url = '/api/prompts';
+                const params = new URLSearchParams();
+                
+                if (currentDirectory === 'my-prompts') {
+                    params.append('user_only', 'true');
+                } else if (currentDirectory === 'shared') {
+                    params.append('directory', 'Shared Prompts');
+                }
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                const response = await apiCall(url);
+                prompts = await response.json();
+                
+                promptGrid.innerHTML = '';
+                
+                if (prompts.length === 0) {
+                    promptGrid.innerHTML = '<div class="loading-message">No prompts found. Create your first prompt!</div>';
+                } else {
+                    prompts.forEach(prompt => {
+                        const card = createPromptCard(prompt);
+                        promptGrid.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading prompts:', error);
+                promptGrid.innerHTML = '<div class="loading-message">Error loading prompts. Please try again.</div>';
+            }
+        }
+
+        // Create prompt card element
+        function createPromptCard(prompt) {
+            const card = document.createElement('div');
+            card.className = 'prompt-card';
+            card.onclick = () => viewPrompt(prompt);
+            
+            const truncatedContent = prompt.content.length > 100 
+                ? prompt.content.substring(0, 100) + '...' 
+                : prompt.content;
+            
+            card.innerHTML = `
+                <h3>${prompt.title}</h3>
+                <p>${truncatedContent}</p>
+                <div class="prompt-meta">
+                    <span>${new Date(prompt.created_at).toLocaleDateString()}</span>
+                    <div class="prompt-actions">
+                        <button class="prompt-action" onclick="event.stopPropagation(); copyPromptDirect(${prompt.id})">Copy</button>
+                        ${prompt.user_id === currentUser.id || currentUser.role === 'admin' ? 
+                            `<button class="prompt-action" onclick="event.stopPropagation(); deletePrompt(${prompt.id})">Delete</button>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // Modal functions
+        function showNewPromptModal() {
+            document.getElementById('newPromptModal').style.display = 'block';
+        }
+
+        function showNewFolderModal() {
+            document.getElementById('newFolderModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Save new prompt
+        async function savePrompt() {
+            const title = document.getElementById('promptTitle').value;
+            const content = document.getElementById('promptContent').value;
+            const directory_id = document.getElementById('promptDirectory').value;
+            const tags = document.getElementById('promptTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            if (title && content) {
+                try {
+                    const response = await apiCall('/api/prompts', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            title,
+                            content,
+                            directory_id: parseInt(directory_id),
+                            tags
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await loadPrompts();
+                        closeModal('newPromptModal');
+                        
+                        // Clear form
+                        document.getElementById('promptTitle').value = '';
+                        document.getElementById('promptContent').value = '';
+                        document.getElementById('promptTags').value = '';
+                    } else {
+                        const error = await response.json();
+                        alert('Error saving prompt: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error saving prompt:', error);
+                    alert('Error saving prompt. Please try again.');
+                }
+            } else {
+                alert('Please enter both title and content');
+            }
+        }
+
+        // View prompt details
+        function viewPrompt(prompt) {
+            document.getElementById('viewPromptTitle').textContent = prompt.title;
+            document.getElementById('viewPromptContent').value = prompt.content;
+            document.getElementById('viewPromptMeta').textContent = 
+                `Created by ${prompt.author_email} on ${new Date(prompt.created_at).toLocaleDateString()}`;
+            document.getElementById('viewPromptModal').style.display = 'block';
+            
+            // Store current prompt for edit functionality
+            window.currentViewingPrompt = prompt;
+        }
+
+        // Copy prompt to clipboard
+        function copyPrompt() {
+            const content = document.getElementById('viewPromptContent').value;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Prompt copied to clipboard!');
+            }).catch(err => {
+                console.error('Error copying to clipboard:', err);
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = content;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Prompt copied to clipboard!');
+            });
+        }
+
+        function copyPromptDirect(promptId) {
+            const prompt = prompts.find(p => p.id === promptId);
+            if (prompt) {
+                navigator.clipboard.writeText(prompt.content).then(() => {
+                    alert('Prompt copied to clipboard!');
+                }).catch(err => {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = prompt.content;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('Prompt copied to clipboard!');
+                });
+            }
+        }
+
+        // Delete prompt
+        async function deletePrompt(promptId) {
+            if (confirm('Are you sure you want to delete this prompt?')) {
+                try {
+                    const response = await apiCall(`/api/prompts/${promptId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        await loadPrompts();
+                    } else {
+                        const error = await response.json();
+                        alert('Error deleting prompt: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error deleting prompt:', error);
+                    alert('Error deleting prompt. Please try again.');
+                }
+            }
+        }
+
+        // Search functionality
+        function searchPrompts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const promptCards = document.querySelectorAll('.prompt-card');
+            
+            promptCards.forEach(card => {
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                const content = card.querySelector('p').textContent.toLowerCase();
+                
+                if (title.includes(searchTerm) || content.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // Edit prompt
+        async function editPrompt() {
+            const prompt = window.currentViewingPrompt;
+            if (!prompt) return;
+            
+            // Close view modal
+            closeModal('viewPromptModal');
+            
+            // Open new prompt modal with existing data
+            document.getElementById('promptTitle').value = prompt.title;
+            document.getElementById('promptContent').value = prompt.content;
+            document.getElementById('promptTags').value = prompt.tags ? prompt.tags.join(', ') : '';
+            
+            // Change the save button to update
+            const saveBtn = document.querySelector('#newPromptModal .modal-btn.primary');
+            saveBtn.textContent = 'Update Prompt';
+            saveBtn.onclick = async () => {
+                const title = document.getElementById('promptTitle').value;
+                const content = document.getElementById('promptContent').value;
+                const tags = document.getElementById('promptTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                if (title && content) {
+                    try {
+                        const response = await apiCall(`/api/prompts/${prompt.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ title, content, tags })
+                        });
+                        
+                        if (response.ok) {
+                            await loadPrompts();
+                            closeModal('newPromptModal');
+                            
+                            // Reset form and button
+                            document.getElementById('promptTitle').value = '';
+                            document.getElementById('promptContent').value = '';
+                            document.getElementById('promptTags').value = '';
+                            saveBtn.textContent = 'Save Prompt';
+                            saveBtn.onclick = savePrompt;
+                        } else {
+                            const error = await response.json();
+                            alert('Error updating prompt: ' + (error.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('Error updating prompt:', error);
+                        alert('Error updating prompt. Please try again.');
+                    }
+                }
+            };
+            
+            showNewPromptModal();
+        }
+
+        // Create folder
+        async function createFolder() {
+            const folderName = document.getElementById('folderName').value;
+            const parentId = document.getElementById('parentDirectory').value;
+            
+            if (folderName) {
+                try {
+                    const response = await apiCall('/api/directories', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            name: folderName,
+                            parent_id: parentId || null,
+                            is_shared: false
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await loadDirectories();
+                        closeModal('newFolderModal');
+                        document.getElementById('folderName').value = '';
+                    } else {
+                        const error = await response.json();
+                        alert('Error creating folder: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error creating folder:', error);
+                    alert('Error creating folder. Please try again.');
+                }
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        // Check for existing session on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            const savedToken = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+            
+            if (savedToken && savedUser) {
+                try {
+                    authToken = savedToken;
+                    currentUser = JSON.parse(savedUser);
+                    
+                    // Verify token is still valid
+                    const response = await apiCall('/api/directories');
+                    
+                    if (response.ok) {
+                        document.getElementById('userEmail').textContent = currentUser.email;
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('appContainer').style.display = 'flex';
+                        
+                        directories = await response.json();
+                        updateDirectoryDropdowns();
+                        await loadPrompts();
+                    }
+                } catch (error) {
+                    // Token invalid, show login
+                    logout();
+                }
+            }
+        });
+    </script>
 </body>
 </html>
