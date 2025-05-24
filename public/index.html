@@ -820,6 +820,7 @@
                 </div>
                 <div class="directory-item ${currentDirectory === 'shared' ? 'active' : ''}" onclick="selectDirectory(this, 'shared')" 
                      ondragover="handleDragOver(event)" 
+                     ondragleave="handleDragOut(event)"
                      ondrop="handleDrop(event, 'shared')">
                     <span class="directory-icon">👥</span>
                     <span>Shared Prompts</span>
@@ -835,6 +836,7 @@
                         <div class="directory-item ${currentDirectory === 'dir-' + dir.id ? 'active' : ''}" 
                              onclick="selectDirectory(this, 'dir-${dir.id}')"
                              ondragover="handleDragOver(event)" 
+                             ondragleave="handleDragOut(event)"
                              ondrop="handleDrop(event, 'dir-${dir.id}')"
                              oncontextmenu="showFolderMenu(event, ${dir.id}, '${dir.name.replace(/'/g, "\\'")}')">
                             <span class="directory-icon">📁</span>
@@ -1066,8 +1068,10 @@
             // Add drag event listeners
             card.ondragstart = (e) => {
                 e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setData('promptId', prompt.id);
+                e.dataTransfer.setData('promptId', prompt.id.toString());
+                e.dataTransfer.setData('text/plain', prompt.id.toString()); // Firefox compatibility
                 card.style.opacity = '0.5';
+                console.log('Dragging prompt:', prompt.id, prompt.title);
             };
             
             card.ondragend = (e) => {
@@ -1384,6 +1388,10 @@
             e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)';
         }
 
+        function handleDragOut(e) {
+            e.currentTarget.style.background = '';
+        }
+
         function handleDrop(e, targetDirectory) {
             e.preventDefault();
             e.currentTarget.style.background = '';
@@ -1421,16 +1429,23 @@
                 
                 if (response.ok) {
                     showCopySuccess('Prompt copied successfully');
-                    if (currentDirectory === 'dir-' + directoryId || 
-                        (currentDirectory === 'shared' && directories.find(d => d.id === directoryId && d.name === 'Shared Prompts'))) {
+                    // Refresh prompts if we're viewing the target directory
+                    const currentDirId = currentDirectory.startsWith('dir-') ? 
+                        parseInt(currentDirectory.replace('dir-', '')) : null;
+                    
+                    if (currentDirId === directoryId || 
+                        (currentDirectory === 'shared' && directories.find(d => d.id === directoryId && d.name === 'Shared Prompts')) ||
+                        currentDirectory === 'all') {
                         await loadPrompts();
                     }
                 } else {
                     const error = await response.json();
                     console.error('Error copying prompt:', error);
+                    alert('Error copying prompt: ' + (error.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error copying prompt:', error);
+                alert('Error copying prompt. Please try again.');
             }
         }
 
