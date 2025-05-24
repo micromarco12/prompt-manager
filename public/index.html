@@ -109,7 +109,7 @@
         .app-container {
             display: none; /* Initially hidden, shown after login */
             height: 100vh;
-            /* display: flex; This was duplicated, removed one */
+            display: flex; /* Ensured this is set for main layout */
         }
 
         /* Sidebar */
@@ -199,7 +199,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            position: relative; /* For folder actions positioning */
+            position: relative; 
         }
 
         .directory-item:hover {
@@ -216,12 +216,6 @@
             font-size: 18px;
         }
 
-        .sub-directory { /* Not actively used by current flat rendering, but keep for future */
-            margin-left: 25px;
-            margin-top: 5px;
-        }
-
-        /* NEW/UPDATED CSS for Folder Actions */
         .directory-item .folder-actions {
             margin-left: auto; 
             display: none; 
@@ -244,7 +238,6 @@
             color: #e0e0e0;
         }
 
-        /* NEW CSS for Drag/Drop visual cues */
         .prompt-card.dragging {
             opacity: 0.5;
             border: 2px dashed #667eea;
@@ -254,8 +247,6 @@
             border: 1px dashed #667eea;
         }
 
-
-        /* Main Content */
         .main-content {
             flex: 1;
             display: flex;
@@ -322,7 +313,6 @@
             color: #666;
         }
 
-        /* Prompt Grid */
         .prompt-grid {
             padding: 30px;
             display: grid;
@@ -375,13 +365,12 @@
             font-size: 14px;
             line-height: 1.5;
             margin-bottom: 15px;
-             /* For text ellipsis */
             display: -webkit-box;
-            -webkit-line-clamp: 3; /* Show 3 lines */
+            -webkit-line-clamp: 3; 
             -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
-            min-height: calc(1.5em * 3); /* approx 3 lines height */
+            min-height: calc(1.5em * 3); 
         }
 
         .prompt-meta {
@@ -412,7 +401,6 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -423,12 +411,11 @@
             background: rgba(0, 0, 0, 0.8);
             z-index: 1000;
             animation: fadeIn 0.3s ease;
-            align-items: center; /* Added for centering modal content */
-            justify-content: center; /* Added for centering modal content */
+            align-items: center; 
+            justify-content: center; 
         }
 
         .modal-content {
-            /* position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); Removed for flex centering */
             background: #1a1a1a;
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 15px;
@@ -445,7 +432,7 @@
 
         @keyframes slideIn {
             from {
-                transform: translateY(-20px); /* Simpler slide from top */
+                transform: translateY(-20px); 
                 opacity: 0;
             }
             to {
@@ -545,30 +532,29 @@
             color: #999;
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
-                position: fixed; /* Consider this if you want a toggleable mobile sidebar */
+                position: fixed; 
                 left: 0;
                 top: 0;
                 height: 100%;
-                z-index: 100; /* Might need a higher z-index if modals overlap */
-                transform: translateX(-100%); /* Initially hidden */
+                z-index: 1000; /* Higher than prompt cards, lower than modals */
+                transform: translateX(-100%); 
             }
 
-            .sidebar.open { /* Add class 'open' via JS to show */
+            .sidebar.open { 
                 transform: translateX(0);
             }
 
             .prompt-grid {
-                grid-template-columns: 1fr; /* Single column on smaller screens */
+                grid-template-columns: 1fr;
             }
             .login-box {
                 width: 90%;
             }
+            /* Consider a hamburger menu button to toggle sidebar on mobile */
         }
         
-        /* NEW Notification CSS */
         .notification {
             position: fixed;
             top: 20px;
@@ -580,23 +566,23 @@
             z-index: 2000; 
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             opacity: 0;
-            transform: translateY(-30px); /* Start further up */
+            transform: translateY(-30px); 
             transition: opacity 0.4s ease-out, transform 0.4s ease-out;
-            display: none; /* Managed by JS */
+            display: none; 
         }
 
         .notification.show {
             opacity: 1;
             transform: translateY(0);
-            display: block !important; /* Ensure it shows */
+            display: block !important; 
         }
 
         .notification.success {
-            background-color: #28a745; /* Green */
+            background-color: #28a745; 
         }
 
         .notification.error {
-            background-color: #dc3545; /* Red */
+            background-color: #dc3545; 
         }
 
     </style>
@@ -647,7 +633,7 @@
                     <span class="directory-icon">👥</span>
                     <span>Shared Prompts</span>
                 </div>
-                </div>
+            </div>
         </div>
 
         <div class="main-content">
@@ -672,13 +658,15 @@
     <div class="modal" id="newPromptModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="promptModalTitle">Create New Prompt</h3> <button class="close-modal" onclick="closeModal('newPromptModal')">&times;</button>
+                <h3 id="promptModalTitle">Create New Prompt</h3> 
+                <button class="close-modal" onclick="closeModal('newPromptModal')">&times;</button>
             </div>
             <div class="modal-body">
-                 <input type="hidden" id="editingPromptId"> <input type="text" id="promptTitle" placeholder="Prompt Title">
+                 <input type="hidden" id="editingPromptId"> 
+                <input type="text" id="promptTitle" placeholder="Prompt Title">
                 <textarea id="promptContent" placeholder="Enter your prompt here..."></textarea>
                 <select id="promptDirectory">
-                    </select>
+                </select>
                 <input type="text" id="promptTags" placeholder="Tags (comma separated)">
             </div>
             <div class="modal-footer">
@@ -695,10 +683,11 @@
                 <button class="close-modal" onclick="closeModal('newFolderModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <input type="hidden" id="editingFolderId"> <input type="text" id="folderName" placeholder="Folder Name">
+                <input type="hidden" id="editingFolderId"> 
+                <input type="text" id="folderName" placeholder="Folder Name">
                 <select id="parentDirectory">
                     <option value="">Root Directory</option>
-                    </select>
+                </select>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn secondary" onclick="closeModal('newFolderModal')">Cancel</button>
@@ -720,26 +709,27 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn secondary" onclick="copyViewedPromptContent()">Copy to Clipboard</button> <button class="modal-btn primary" onclick="editPromptFromViewModal()">Edit</button> </div>
+                <button class="modal-btn secondary" onclick="copyViewedPromptContent()">Copy to Clipboard</button> 
+                <button class="modal-btn primary" onclick="editPromptFromViewModal()">Edit</button> 
+            </div>
         </div>
     </div>
 
     <div id="notification" class="notification"></div>
 
     <script>
-        // --- Global variables (combination of Working.html and new ones) ---
+        // --- Global variables ---
         let currentUser = null;
-        let prompts = [];       // Array of prompt objects
-        let directories = [];   // Array of directory objects
-        let currentDirectory = 'all'; // Tracks selected directory type or ID string for filtering
+        let prompts = [];       
+        let directories = [];   
+        let currentDirectory = 'all'; 
         let authToken = null;
-        
-        let draggedPromptId = null; // For drag-and-drop
-        let originalSaveFolderBtnOnclick = null; // To restore create folder button's original onclick
-        let originalSavePromptBtnOnclick = null; // To restore create prompt button's original onclick
-        let currentViewingPrompt = null; // From Working.html's window.currentViewingPrompt, made local
+        let draggedPromptId = null; 
+        let originalSaveFolderBtnOnclick = null; 
+        let originalSavePromptBtnOnclick = null; 
+        let currentViewingPrompt = null; 
 
-        // --- DOM Element References (cache them for performance) ---
+        // --- DOM Element References ---
         const loginScreenEl = document.getElementById('loginScreen');
         const appContainerEl = document.getElementById('appContainer');
         const loginFormEl = document.getElementById('loginForm');
@@ -775,113 +765,86 @@
 
         const notificationEl = document.getElementById('notification');
 
-        // --- API Call Helper (from Working.html, slightly enhanced for potential non-JSON error) ---
+        // --- API Call Helper ---
         async function apiCall(url, options = {}) {
             const headers = {
                 'Content-Type': 'application/json',
                 ...options.headers
             };
-            
             if (authToken) {
                 headers['Authorization'] = `Bearer ${authToken}`;
             }
-            
-            const response = await fetch(url, { // Assumes API is on the same origin
-                ...options,
-                headers
-            });
-            
+            const response = await fetch(url, { ...options, headers });
             if (!response.ok && response.status === 401 && url !== '/api/login' && url !== '/api/register') { 
-                // Don't logout on login/register fail, as that's handled by the form.
-                // But if other authenticated calls fail with 401, token might be expired.
                 showNotification('Session expired. Please log in again.', 'error');
-                logout(); // Auto-logout
+                logout(); 
                 throw new Error('Session expired');
             }
-            
-            return response; // Return the raw response for further processing
+            return response; 
         }
 
-        // --- Notification System (NEW) ---
+        // --- Notification System ---
         function showNotification(message, type = 'success') {
             if (!notificationEl) return;
-
             notificationEl.textContent = message;
-            notificationEl.className = 'notification'; // Reset classes
+            notificationEl.className = 'notification'; 
             notificationEl.classList.add(type); 
-            
-            // Force reflow to ensure transition works if called rapidly
             notificationEl.style.display = 'none';
-            notificationEl.offsetHeight; // Trigger reflow
+            notificationEl.offsetHeight; 
             notificationEl.style.display = 'block';
-
-
-            setTimeout(() => {
-                notificationEl.classList.add('show');
-            }, 10); 
-
+            setTimeout(() => { notificationEl.classList.add('show'); }, 10); 
             setTimeout(() => {
                 notificationEl.classList.remove('show');
-                setTimeout(() => {
-                    if (!notificationEl.classList.contains('show')) { // Hide only if not reshown
+                setTimeout(() => { 
+                    if (!notificationEl.classList.contains('show')) {
                          notificationEl.style.display = 'none';
                     }
                 }, 400); 
             }, 3000);
         }
         
-        // --- Login/Logout (from Working.html, adapted to use new notification) ---
+        // --- Login/Logout ---
         loginFormEl.addEventListener('submit', async function(e) {
             e.preventDefault();
             const email = emailInputEl.value;
             const password = passwordInputEl.value;
-            
             try {
-                const response = await fetch('/api/login', { // Direct fetch, not using apiCall for initial login
+                const response = await fetch('/api/login', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
-                
                 const data = await response.json();
-                
                 if (response.ok) {
                     authToken = data.token;
                     currentUser = data.user;
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    
                     userEmailDisplayEl.textContent = currentUser.email;
                     loginScreenEl.style.display = 'none';
-                    appContainerEl.style.display = 'flex'; // Ensure app container is flex
-                    
+                    appContainerEl.style.display = 'flex'; 
                     await loadInitialData();
                     showNotification('Login successful!', 'success');
                 } else {
-                    // Try to register if login fails (as per Working.html logic)
                     const registerResponse = await fetch('/api/register', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email, password })
                     });
                     const registerData = await registerResponse.json();
-
                     if (registerResponse.ok) {
                         showNotification('Account created! Logging you in...', 'success');
-                        // Now login again
                         const loginAfterRegisterResponse = await fetch('/api/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email, password })
                         });
                         const loginAfterRegisterData = await loginAfterRegisterResponse.json();
-
                         if (loginAfterRegisterResponse.ok) {
                             authToken = loginAfterRegisterData.token;
                             currentUser = loginAfterRegisterData.user;
                             localStorage.setItem('token', loginAfterRegisterData.token);
                             localStorage.setItem('user', JSON.stringify(loginAfterRegisterData.user));
-                            
                             userEmailDisplayEl.textContent = currentUser.email;
                             loginScreenEl.style.display = 'none';
                             appContainerEl.style.display = 'flex';
@@ -895,7 +858,7 @@
                 }
             } catch (error) {
                 console.error('Login/Register process error:', error);
-                showNotification('Connection error or invalid server response. Please try again.', 'error');
+                showNotification('Connection error or server issue. Please try again.', 'error');
             }
         });
 
@@ -906,47 +869,48 @@
             localStorage.removeItem('user');
             loginScreenEl.style.display = 'flex';
             appContainerEl.style.display = 'none';
-            emailInputEl.value = ''; // Clear login form
-            passwordInputEl.value = '';
-            directoryTreeEl.innerHTML = ''; // Clear sidebar
-            promptGridEl.innerHTML = ''; // Clear prompts
+            if (emailInputEl) emailInputEl.value = ''; 
+            if (passwordInputEl) passwordInputEl.value = '';
+            if (directoryTreeEl) directoryTreeEl.innerHTML = ''; 
+            if (promptGridEl) promptGridEl.innerHTML = ''; 
             showNotification('You have been logged out.', 'success');
         }
 
         async function loadInitialData() {
-            await loadDirectories(); // This will also render tree and load prompts if selectDirectory calls loadPrompts
-            // Select 'all' by default if no other directory is active
-            if (currentDirectory === 'all' && directoryTreeEl.querySelector('.directory-item.active[onclick*="\'all\'"]')) {
-                 selectDirectory(directoryTreeEl.querySelector('.directory-item.active[onclick*="\'all\'"]'), 'all', 'All Prompts');
-            } else { // Fallback if initial selection logic needs to be more explicit
-                const allPromptsItem = Array.from(directoryTreeEl.querySelectorAll('.directory-item')).find(el => el.getAttribute('onclick')?.includes("'all'"));
-                selectDirectory(allPromptsItem || directoryTreeEl.firstElementChild, 'all', 'All Prompts');
+            await loadDirectories(); 
+            const allPromptsItem = Array.from(directoryTreeEl.querySelectorAll('.directory-item')).find(el => el.getAttribute('onclick')?.includes("'all'"));
+            if (allPromptsItem) {
+                selectDirectory(allPromptsItem, 'all', 'All Prompts');
+            } else if (directoryTreeEl.firstElementChild) {
+                 // Fallback if 'all' item isn't found by onclick string match
+                 selectDirectory(directoryTreeEl.firstElementChild, 'all', 'All Prompts');
+            } else {
+                currentDirectory = 'all'; // Set current directory
+                currentDirectoryDisplayEl.textContent = 'All Prompts'; // Update display
+                loadPrompts(); // Load prompts for 'all'
             }
         }
         
-        // --- Directory/Folder Management (NEW and ENHANCED) ---
+        // --- Directory/Folder Management ---
         function populateParentDirectoryDropdown() {
-            if (!parentDirectorySelectEl) return;
+            if (!parentDirectorySelectEl || !directories || !currentUser) return;
             const currentValue = parentDirectorySelectEl.value;
             parentDirectorySelectEl.innerHTML = '<option value="">Root Directory</option>';
-            if (directories && currentUser) {
-                directories.forEach(dir => {
-                    if (!dir.is_shared && dir.user_id === currentUser.id) {
-                        const option = document.createElement('option');
-                        option.value = dir.id;
-                        option.textContent = dir.name;
-                        parentDirectorySelectEl.appendChild(option);
-                    }
-                });
-            }
+            directories.forEach(dir => {
+                if (!dir.is_shared && dir.user_id === currentUser.id) {
+                    const option = document.createElement('option');
+                    option.value = dir.id;
+                    option.textContent = dir.name;
+                    parentDirectorySelectEl.appendChild(option);
+                }
+            });
             if (currentValue) parentDirectorySelectEl.value = currentValue;
         }
         
         function renderDirectoryTree() {
             if (!directoryTreeEl) return;
-        
             const hardcodedItemsHTML = `
-                <div class="directory-item active" onclick="selectDirectory(this, 'all', 'All Prompts')">
+                <div class="directory-item" onclick="selectDirectory(this, 'all', 'All Prompts')">
                     <span class="directory-icon">📚</span>
                     <span>All Prompts</span>
                 </div>
@@ -957,52 +921,35 @@
                 <div class="directory-item" onclick="selectDirectory(this, 'shared', 'Shared Prompts')">
                     <span class="directory-icon">👥</span>
                     <span>Shared Prompts</span>
-                </div>
-            `;
-            directoryTreeEl.innerHTML = hardcodedItemsHTML; // Start with hardcoded
-        
+                </div>`;
+            directoryTreeEl.innerHTML = hardcodedItemsHTML; 
             if (directories && directories.length > 0) {
                 directories.forEach(dir => {
-                    // Assuming 'directories' global array doesn't include the hardcoded concepts
-                    // or that hardcoded ones have special IDs not in the numeric range from DB
                     const dirItem = document.createElement('div');
                     dirItem.className = 'directory-item';
                     dirItem.dataset.folderId = dir.id;
-        
                     const icon = document.createElement('span');
                     icon.className = 'directory-icon';
                     icon.textContent = '📁';
                     dirItem.appendChild(icon);
-        
                     const nameSpan = document.createElement('span');
                     nameSpan.textContent = dir.name;
                     dirItem.appendChild(nameSpan);
-        
                     dirItem.onclick = () => selectDirectory(dirItem, `folder-${dir.id}`, dir.name);
-        
                     dirItem.addEventListener('dragover', handleDragOver);
                     dirItem.addEventListener('dragleave', handleDragLeave);
                     dirItem.addEventListener('drop', (event) => handleDropOnFolder(event, dir.id));
-                    
-                    // Add Edit/Delete buttons only if user owns the folder
                     if (currentUser && dir.user_id === currentUser.id) {
                         const actionsContainer = document.createElement('div');
                         actionsContainer.className = 'folder-actions';
-        
                         const editBtn = document.createElement('button');
-                        editBtn.className = 'folder-action-btn';
-                        editBtn.innerHTML = '✏️';
-                        editBtn.title = 'Edit Folder';
+                        editBtn.className = 'folder-action-btn'; editBtn.innerHTML = '✏️'; editBtn.title = 'Edit Folder';
                         editBtn.onclick = (e) => { e.stopPropagation(); showEditFolderModal(dir); };
                         actionsContainer.appendChild(editBtn);
-        
                         const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'folder-action-btn';
-                        deleteBtn.innerHTML = '🗑️';
-                        deleteBtn.title = 'Delete Folder';
+                        deleteBtn.className = 'folder-action-btn'; deleteBtn.innerHTML = '🗑️'; deleteBtn.title = 'Delete Folder';
                         deleteBtn.onclick = (e) => { e.stopPropagation(); deleteFolder(dir.id); };
                         actionsContainer.appendChild(deleteBtn);
-                        
                         dirItem.appendChild(actionsContainer);
                     }
                     directoryTreeEl.appendChild(dirItem);
@@ -1017,11 +964,9 @@
                 item.classList.remove('active');
                 const onclickAttr = item.getAttribute('onclick');
                 if (!onclickAttr) return;
-
                 const typeMatch = onclickAttr.match(/selectDirectory\(this, '([^']*)'/);
                 const itemType = typeMatch ? typeMatch[1] : null;
                 const itemFolderId = item.dataset.folderId;
-                
                 if (currentDirectory === itemType || 
                     (itemFolderId && currentDirectory === `folder-${itemFolderId}`)) {
                     item.classList.add('active');
@@ -1034,9 +979,8 @@
                 const response = await apiCall('/api/directories');
                 if (!response.ok) throw new Error(`API error: ${response.status} ${await response.text()}`);
                 directories = await response.json();
-                
-                updateDirectoryDropdowns(); // For "New Prompt" modal (from Working.html)
-                populateParentDirectoryDropdown(); // For "New/Edit Folder" modal
+                updateDirectoryDropdowns(); 
+                populateParentDirectoryDropdown(); 
                 renderDirectoryTree();
             } catch (error) {
                 console.error('Error loading directories:', error);
@@ -1044,23 +988,18 @@
             }
         }
         
-        // From Working.html, ensures promptDirectory select is populated
         function updateDirectoryDropdowns() {
-            if (!promptDirectorySelectEl) return;
+            if (!promptDirectorySelectEl || !directories || !currentUser) return;
             const currentValue = promptDirectorySelectEl.value;
             promptDirectorySelectEl.innerHTML = ''; 
-            if (directories && currentUser) {
-                directories.forEach(dir => {
-                    // Only allow saving to user's own, non-shared folders or shared folders they can access
-                    if (dir.user_id === currentUser.id || dir.is_shared) {
-                        const option = document.createElement('option');
-                        option.value = dir.id;
-                        option.textContent = dir.name;
-                        promptDirectorySelectEl.appendChild(option);
-                    }
-                });
-            }
-             // Try to reselect previous or first valid option
+            directories.forEach(dir => {
+                if (dir.user_id === currentUser.id || dir.is_shared) {
+                    const option = document.createElement('option');
+                    option.value = dir.id;
+                    option.textContent = dir.name;
+                    promptDirectorySelectEl.appendChild(option);
+                }
+            });
             if (currentValue && Array.from(promptDirectorySelectEl.options).some(opt => opt.value === currentValue)) {
                 promptDirectorySelectEl.value = currentValue;
             } else if (promptDirectorySelectEl.options.length > 0) {
@@ -1074,11 +1013,10 @@
             editingFolderIdInputEl.value = ''; 
             folderNameInputEl.value = '';
             populateParentDirectoryDropdown(); 
-            parentDirectorySelectEl.value = ''; 
-
+            if (parentDirectorySelectEl) parentDirectorySelectEl.value = ''; 
             saveFolderBtnEl.textContent = 'Create Folder';
-            saveFolderBtnEl.onclick = () => handleSaveFolder(false); // Ensure it calls create
-            showNewFolderModal(); // Original function from Working.html to show modal
+            saveFolderBtnEl.onclick = () => handleSaveFolder(false); 
+            showNewFolderModal(); 
         }
 
         function showEditFolderModal(folder) {
@@ -1086,20 +1024,17 @@
             folderModalTitleEl.textContent = 'Edit Folder';
             editingFolderIdInputEl.value = folder.id;
             folderNameInputEl.value = folder.name;
-            
             populateParentDirectoryDropdown(); 
-            parentDirectorySelectEl.value = folder.parent_id || ""; 
-
+            if (parentDirectorySelectEl) parentDirectorySelectEl.value = folder.parent_id || ""; 
             saveFolderBtnEl.textContent = 'Update Folder';
-            saveFolderBtnEl.onclick = () => handleSaveFolder(true); // Calls with update flag
-            showNewFolderModal(); // Original function from Working.html to show modal
+            saveFolderBtnEl.onclick = () => handleSaveFolder(true); 
+            showNewFolderModal(); 
         }
 
         async function handleSaveFolder(isUpdate = false) {
             const folderName = folderNameInputEl.value.trim();
             let parentIdValue = parentDirectorySelectEl.value;
             const parent_id = parentIdValue ? parseInt(parentIdValue) : null;
-            
             const editingFolderIdValue = editingFolderIdInputEl.value;
             const editingFolderId = isUpdate && editingFolderIdValue ? parseInt(editingFolderIdValue) : null;
 
@@ -1107,40 +1042,22 @@
                 showNotification('Folder name cannot be empty.', 'error');
                 return;
             }
-
             let url = '/api/directories';
             let method = 'POST';
             const bodyData = { name: folderName, parent_id }; 
-            // is_shared is not set from this modal in this version, defaults to false on backend for POST
-
             if (isUpdate && editingFolderId) {
                 url = `/api/directories/${editingFolderId}`;
                 method = 'PUT';
-                // For PUT, only send fields that can be updated.
-                // Your server's PUT /api/directories/:id handles partial updates.
             } else if (isUpdate && !editingFolderId) {
                 showNotification("Error: Folder ID missing for update.", "error");
                 return;
             }
-
             try {
-                const response = await apiCall(url, {
-                    method: method,
-                    body: JSON.stringify(bodyData)
-                });
-
+                const response = await apiCall(url, { method: method, body: JSON.stringify(bodyData) });
                 if (response.ok) {
                     await loadDirectories(); 
                     closeModal('newFolderModal');
                     showNotification(`Folder ${isUpdate ? 'updated' : 'created'} successfully!`, 'success');
-                    // Reset modal for next 'Create New Folder'
-                    folderNameInputEl.value = '';
-                    parentDirectorySelectEl.value = '';
-                    editingFolderIdInputEl.value = '';
-                    folderModalTitleEl.textContent = 'Create New Folder';
-                    saveFolderBtnEl.textContent = 'Create Folder';
-                    saveFolderBtnEl.onclick = () => handleSaveFolder(false);
-
                 } else {
                     const error = await response.json().catch(() => ({ error: `Failed to ${isUpdate ? 'update' : 'create'} folder` }));
                     showNotification(`Error: ${error.error}`, 'error');
@@ -1152,9 +1069,7 @@
         }
         
         async function deleteFolder(folderId) {
-            if (!confirm(`Are you sure you want to delete this folder? Prompts may be affected.`)) {
-                return;
-            }
+            if (!confirm(`Are you sure you want to delete this folder? Prompts may be affected.`)) return;
             try {
                 const response = await apiCall(`/api/directories/${folderId}`, { method: 'DELETE' });
                 if (response.ok) {
@@ -1162,7 +1077,8 @@
                     await loadDirectories(); 
                     if (currentDirectory === `folder-${folderId}`) {
                         const allPromptsItem = directoryTreeEl.querySelector('.directory-item[onclick*="\'all\'"]');
-                        selectDirectory(allPromptsItem, 'all', 'All Prompts');
+                        if (allPromptsItem) selectDirectory(allPromptsItem, 'all', 'All Prompts');
+                        else { currentDirectory = 'all'; loadPrompts(); }
                     }
                 } else {
                     const error = await response.json().catch(() => ({ error: 'Failed to delete folder' }));
@@ -1174,53 +1090,41 @@
             }
         }
 
-        // --- Prompt Management (mostly from Working.html, adapted) ---
-        function selectDirectory(element, directoryType, displayName) { // displayName added
-            if (!directoryTreeEl) return;
+        // --- Prompt Management ---
+        function selectDirectory(element, directoryType, displayName) { 
+            if (!directoryTreeEl || !currentDirectoryDisplayEl) return;
             directoryTreeEl.querySelectorAll('.directory-item').forEach(item => item.classList.remove('active'));
             if (element) element.classList.add('active');
-            
-            currentDirectory = directoryType; // e.g., 'all', 'my-prompts', 'folder-123'
-            currentDirectoryDisplayEl.textContent = displayName || 'Prompts'; // Use provided display name
+            currentDirectory = directoryType; 
+            currentDirectoryDisplayEl.textContent = displayName || 'Prompts'; 
             loadPrompts();
         }
 
         async function loadPrompts() {
             if (!promptGridEl) return;
             promptGridEl.innerHTML = '<div class="loading-message">Loading prompts...</div>';
-            
             try {
                 let url = '/api/prompts';
                 const params = new URLSearchParams();
-                
                 if (currentDirectory === 'my-prompts') {
-                    params.append('user_only', 'true'); // Server handles this to filter by req.user.id
+                    params.append('user_only', 'true'); 
                 } else if (currentDirectory === 'shared') {
-                    // This requires backend support for "show all shared prompts user can see"
-                    // Your current API GET /api/prompts filters by a specific directory name or ID, or user_only
-                    // For now, this might show all prompts the user can see if no specific filter is effective for "shared"
-                    // A true "shared" view might need backend logic or client-side filtering after fetching directories.
-                    // Let's assume for now this fetches all user-accessible prompts, and shared ones will appear.
-                    // OR your backend /api/prompts needs a ?scope=shared parameter.
-                    // For now, not adding a specific param for shared, relying on default visibility.
+                    // This requires specific backend logic for 'shared scope' if not just filtering by a directory named 'Shared Prompts'
+                    // For now, we'll assume it works by convention or backend handles general access.
                 } else if (currentDirectory && currentDirectory.startsWith('folder-')) {
                     const folderId = currentDirectory.split('folder-')[1];
                     if (folderId) params.append('directory_id', folderId);
                 }
-                
                 const searchTerm = searchInputEl.value;
                 if (searchTerm) {
-                    params.append('search', searchTerm); // Backend search
+                    params.append('search', searchTerm); 
                 }
-                
                 if (params.toString()) {
                     url += '?' + params.toString();
                 }
-                
                 const response = await apiCall(url);
                 if (!response.ok) throw new Error(`API error: ${response.status} - ${await response.text()}`);
                 prompts = await response.json();
-                
                 promptGridEl.innerHTML = '';
                 if (prompts.length === 0) {
                     promptGridEl.innerHTML = '<div class="loading-message">No prompts found.</div>';
@@ -1237,7 +1141,7 @@
             }
         }
 
-        function createPromptCard(prompt) { // Adapted with drag-and-drop and dataset.promptId
+        function createPromptCard(prompt) {
             const card = document.createElement('div');
             card.className = 'prompt-card';
             card.draggable = true;
@@ -1246,112 +1150,93 @@
             card.addEventListener('dragstart', (event) => {
                 draggedPromptId = prompt.id;
                 event.dataTransfer.setData('text/plain', prompt.id);
-                event.target.style.opacity = '0.5'; // Visual cue
+                event.target.classList.add('dragging'); 
             });
             card.addEventListener('dragend', (event) => {
-                event.target.style.opacity = '1'; // Reset visual cue
+                event.target.classList.remove('dragging');
                 draggedPromptId = null;
             });
             
-            const truncatedContent = prompt.content.length > 100 
-                ? prompt.content.substring(0, 100) + '...' 
-                : prompt.content;
-            
-            // Use textContent for safety against XSS if content can be user-generated HTML
             const titleH3 = document.createElement('h3');
             titleH3.textContent = prompt.title;
             const contentP = document.createElement('p');
+            const truncatedContent = prompt.content.length > 100 
+                ? prompt.content.substring(0, 100) + '...' 
+                : prompt.content;
             contentP.textContent = truncatedContent;
-
             card.appendChild(titleH3);
             card.appendChild(contentP);
 
             const metaDiv = document.createElement('div');
             metaDiv.className = 'prompt-meta';
-            
             const dateSpan = document.createElement('span');
             dateSpan.textContent = new Date(prompt.updated_at || prompt.created_at).toLocaleDateString();
-            
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'prompt-actions';
 
             const copyBtn = document.createElement('button');
             copyBtn.className = 'prompt-action';
             copyBtn.textContent = 'Copy';
-            copyBtn.onclick = (e) => { e.stopPropagation(); copyPromptDirect(prompt.id); };
+            copyBtn.onclick = function(e) { e.stopPropagation(); copyPromptDirect(prompt.id); };
             actionsDiv.appendChild(copyBtn);
 
             if (currentUser && (prompt.user_id === currentUser.id || currentUser.role === 'admin')) {
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'prompt-action';
                 deleteBtn.textContent = 'Delete';
-                deleteBtn.onclick = (e) => { e.stopPropagation(); deletePrompt(prompt.id); };
+                deleteBtn.onclick = function(e) { e.stopPropagation(); deletePrompt(prompt.id); };
                 actionsDiv.appendChild(deleteBtn);
             }
             metaDiv.appendChild(dateSpan);
             metaDiv.appendChild(actionsDiv);
             card.appendChild(metaDiv);
-
-            card.onclick = () => viewPrompt(prompt); // Main card click
+            card.onclick = () => viewPrompt(prompt); 
             return card;
         }
         
-        // Modal functions (from Working.html)
         function showNewPromptModal() {
-            if (!promptModalTitleEl || !editingPromptIdInputEl || !savePromptBtnEl) return;
+            if (!promptModalTitleEl || !editingPromptIdInputEl || !savePromptBtnEl || !promptTitleInputEl || !promptContentInputEl || !promptTagsInputEl || !promptDirectorySelectEl) return;
             promptModalTitleEl.textContent = 'Create New Prompt';
-            editingPromptIdInputEl.value = ''; // Clear editing ID
+            editingPromptIdInputEl.value = ''; 
             promptTitleInputEl.value = '';
             promptContentInputEl.value = '';
             promptTagsInputEl.value = '';
-            updateDirectoryDropdowns(); // Ensure folder list is current
-
-            // Pre-select current folder if it's a specific folder
+            updateDirectoryDropdowns(); 
             if (currentDirectory && currentDirectory.startsWith('folder-')) {
                 const folderId = currentDirectory.split('folder-')[1];
                 if (promptDirectorySelectEl.querySelector(`option[value="${folderId}"]`)) {
                     promptDirectorySelectEl.value = folderId;
                 }
             } else if (promptDirectorySelectEl.options.length > 0) {
-                 // Default to first available directory if not in a specific folder view
                  promptDirectorySelectEl.value = promptDirectorySelectEl.options[0].value;
             }
-
-
             savePromptBtnEl.textContent = 'Save Prompt';
-            if (originalSavePromptBtnOnclick) {
-                savePromptBtnEl.onclick = originalSavePromptBtnOnclick;
-            } else {
-                 savePromptBtnEl.onclick = () => handleSavePrompt(false); // Default to create
-            }
-            newPromptModalEl.style.display = 'flex'; // Use flex for centering
+            savePromptBtnEl.onclick = () => handleSavePrompt(false);
+            newPromptModalEl.style.display = 'flex'; 
         }
 
-        function showNewFolderModal() { // This is the generic display toggler from Working.html
-             newFolderModalEl.style.display = 'flex'; // Use flex for centering
+        function showNewFolderModal() { 
+             if (newFolderModalEl) newFolderModalEl.style.display = 'flex'; 
         }
 
         function closeModal(modalId) {
             const modal = document.getElementById(modalId);
             if (modal) modal.style.display = 'none';
-
-            // Reset prompt modal button if it was changed for "Update"
-            if (modalId === 'newPromptModal' && savePromptBtnEl) {
+            if (modalId === 'newPromptModal' && savePromptBtnEl && promptModalTitleEl && editingPromptIdInputEl) {
                  savePromptBtnEl.textContent = 'Save Prompt';
-                 if (originalSavePromptBtnOnclick) savePromptBtnEl.onclick = originalSavePromptBtnOnclick;
-                 else savePromptBtnEl.onclick = () => handleSavePrompt(false);
+                 savePromptBtnEl.onclick = () => handleSavePrompt(false);
+                 promptModalTitleEl.textContent = 'Create New Prompt';
+                 editingPromptIdInputEl.value = '';
             }
-            // Reset folder modal button if it was changed for "Update"
-            if (modalId === 'newFolderModal' && saveFolderBtnEl) {
+            if (modalId === 'newFolderModal' && saveFolderBtnEl && folderModalTitleEl && editingFolderIdInputEl) {
                 saveFolderBtnEl.textContent = 'Create Folder';
-                if (originalSaveFolderBtnOnclick) saveFolderBtnEl.onclick = originalSaveFolderBtnOnclick;
-                else saveFolderBtnEl.onclick = () => handleSavePrompt(false);
-                folderModalTitleEl.textContent = 'Create New Folder'; // Reset title
-                editingFolderIdInputEl.value = ''; // Clear ID
+                saveFolderBtnEl.onclick = () => handleSaveFolder(false);
+                folderModalTitleEl.textContent = 'Create New Folder'; 
+                editingFolderIdInputEl.value = ''; 
             }
         }
 
-        async function handleSavePrompt(isUpdate = false) { // Renamed from Working.html's savePrompt
+        async function handleSavePrompt(isUpdate = false) { 
             const title = promptTitleInputEl.value.trim();
             const content = promptContentInputEl.value.trim();
             const directory_id = promptDirectorySelectEl.value;
@@ -1362,11 +1247,9 @@
                 showNotification('Title, content, and folder are required.', 'error');
                 return;
             }
-
             const promptData = { title, content, directory_id: parseInt(directory_id), tags };
             let url = '/api/prompts';
             let method = 'POST';
-
             if (isUpdate && editingPromptId) {
                 url = `/api/prompts/${editingPromptId}`;
                 method = 'PUT';
@@ -1374,21 +1257,12 @@
                  showNotification('Error: Prompt ID missing for update.', 'error');
                 return;
             }
-            
             try {
-                const response = await apiCall(url, {
-                    method: method,
-                    body: JSON.stringify(promptData)
-                });
+                const response = await apiCall(url, { method: method, body: JSON.stringify(promptData) });
                 if (response.ok) {
                     await loadPrompts();
                     closeModal('newPromptModal');
                     showNotification(`Prompt ${isUpdate ? 'updated' : 'saved'} successfully!`, 'success');
-                    // Clear form (already done in closeModal if properly reset)
-                    promptTitleInputEl.value = '';
-                    promptContentInputEl.value = '';
-                    promptTagsInputEl.value = '';
-                    editingPromptIdInputEl.value = ''; // Clear ID
                 } else {
                     const error = await response.json().catch(() => ({error: 'Unknown server error'}));
                     showNotification(`Error ${isUpdate ? 'updating' : 'saving'} prompt: ${error.error}`, 'error');
@@ -1399,36 +1273,37 @@
             }
         }
         
-        // Store original onclick for save buttons
-        if (savePromptBtnEl) originalSavePromptBtnOnclick = savePromptBtnEl.onclick;
-        if (saveFolderBtnEl) originalSaveFolderBtnOnclick = saveFolderBtnEl.onclick;
-        // Reassign initial onclicks to the new handler
-        if (savePromptBtnEl) savePromptBtnEl.onclick = () => handleSavePrompt(false);
-        if (saveFolderBtnEl) saveFolderBtnEl.onclick = () => handleSaveFolder(false);
-
-
-        function viewPrompt(prompt) { // From Working.html, adapted
-            if (!prompt || !viewPromptModalEl) return;
-            currentViewingPrompt = prompt; // Store for edit
-            viewPromptTitleDisplayEl.textContent = prompt.title;
-            viewPromptContentAreaEl.value = prompt.content; // Textarea uses .value
-            viewPromptMetaDisplayEl.textContent = 
-                `By: ${prompt.author_email || 'Unknown'} on ${new Date(prompt.created_at).toLocaleDateString()}. In: ${prompt.directory_name || 'N/A'}`;
-            viewPromptModalEl.style.display = 'flex'; // Use flex for centering
+        // Store original onclick for save buttons once DOM is ready, or ensure they are set if buttons are dynamically created.
+        // Initial assignment for statically present buttons:
+        if (savePromptBtnEl) {
+            originalSavePromptBtnOnclick = savePromptBtnEl.onclick; // Store original if any
+            savePromptBtnEl.onclick = () => handleSavePrompt(false); // Set default
+        }
+        if (saveFolderBtnEl) {
+            originalSaveFolderBtnOnclick = saveFolderBtnEl.onclick; // Store original if any
+            saveFolderBtnEl.onclick = () => handleSaveFolder(false); // Set default
         }
 
-        function copyViewedPromptContent() { // Renamed from Working.html's copyPrompt
+        function viewPrompt(prompt) { 
+            if (!prompt || !viewPromptModalEl || !viewPromptTitleDisplayEl || !viewPromptContentAreaEl || !viewPromptMetaDisplayEl) return;
+            currentViewingPrompt = prompt; 
+            viewPromptTitleDisplayEl.textContent = prompt.title;
+            viewPromptContentAreaEl.value = prompt.content; 
+            viewPromptMetaDisplayEl.textContent = 
+                `By: ${prompt.author_email || 'Unknown'} on ${new Date(prompt.created_at).toLocaleDateString()}. In: ${prompt.directory_name || 'N/A'}`;
+            viewPromptModalEl.style.display = 'flex'; 
+        }
+
+        function copyViewedPromptContent() { 
             const content = viewPromptContentAreaEl.value;
             navigator.clipboard.writeText(content).then(() => {
                 showNotification('Prompt copied to clipboard!', 'success');
             }).catch(err => {
                 console.warn('Async clipboard copy failed, trying fallback:', err);
-                try { // Fallback for older browsers/non-secure contexts
+                try { 
                     const textarea = document.createElement('textarea');
-                    textarea.value = content;
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    document.execCommand('copy');
+                    textarea.value = content; document.body.appendChild(textarea);
+                    textarea.select(); document.execCommand('copy');
                     document.body.removeChild(textarea);
                     showNotification('Prompt copied (fallback)!', 'success');
                 } catch (fallbackErr) {
@@ -1438,27 +1313,23 @@
             });
         }
         
-        function editPromptFromViewModal() { // Renamed from Working.html's editPrompt
-            if (!currentViewingPrompt || !newPromptModalEl) return;
-            
-            closeModal('viewPromptModal'); // Close view modal first
-            
+        function editPromptFromViewModal() { 
+            if (!currentViewingPrompt || !newPromptModalEl || !promptModalTitleEl || !editingPromptIdInputEl || !promptTitleInputEl || !promptContentInputEl || !promptTagsInputEl || !promptDirectorySelectEl || !savePromptBtnEl) return;
+            closeModal('viewPromptModal'); 
             promptModalTitleEl.textContent = 'Edit Prompt';
             editingPromptIdInputEl.value = currentViewingPrompt.id;
             promptTitleInputEl.value = currentViewingPrompt.title;
             promptContentInputEl.value = currentViewingPrompt.content;
             promptTagsInputEl.value = currentViewingPrompt.tags ? currentViewingPrompt.tags.join(', ') : '';
-            updateDirectoryDropdowns(); // Ensure directory list is current
+            updateDirectoryDropdowns(); 
             promptDirectorySelectEl.value = currentViewingPrompt.directory_id;
-
             savePromptBtnEl.textContent = 'Update Prompt';
-            savePromptBtnEl.onclick = () => handleSavePrompt(true); // Set to update mode
-            
+            savePromptBtnEl.onclick = () => handleSavePrompt(true); 
             newPromptModalEl.style.display = 'flex';
         }
 
-        function copyPromptDirect(promptId) { // From Working.html, adapted for notification
-            const prompt = prompts.find(p => p.id === promptId);
+        function copyPromptDirect(promptId) { 
+            const prompt = prompts.find(p => p.id.toString() === promptId.toString());
             if (prompt) {
                 navigator.clipboard.writeText(prompt.content).then(() => {
                     showNotification('Prompt content copied!', 'success');
@@ -1466,10 +1337,8 @@
                      console.warn('Async clipboard copy failed, trying fallback:', err);
                      try {
                         const textarea = document.createElement('textarea');
-                        textarea.value = prompt.content;
-                        document.body.appendChild(textarea);
-                        textarea.select();
-                        document.execCommand('copy');
+                        textarea.value = prompt.content; document.body.appendChild(textarea);
+                        textarea.select(); document.execCommand('copy');
                         document.body.removeChild(textarea);
                         showNotification('Prompt content copied (fallback)!', 'success');
                     } catch (fallbackErr) {
@@ -1477,10 +1346,12 @@
                         console.error('Fallback copy failed:', fallbackErr);
                     }
                 });
+            } else {
+                showNotification('Could not find prompt to copy.', 'error');
             }
         }
 
-        async function deletePrompt(promptId) { // From Working.html, adapted for notification and logging
+        async function deletePrompt(promptId) { 
             if (!confirm('Are you sure you want to delete this prompt?')) return;
             console.log('Attempting to delete prompt ID:', promptId);
             try {
@@ -1490,9 +1361,9 @@
                     showNotification('Prompt deleted successfully!', 'success');
                     await loadPrompts();
                 } else {
-                    const error = await response.json().catch(() => ({ error: 'Failed to parse error' }));
-                    showNotification(`Error deleting prompt: ${error.error}`, 'error');
-                    console.error('Error response from API:', error);
+                    const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from server' }));
+                    showNotification(`Error deleting prompt: ${errorData.error}`, 'error');
+                    console.error('Error response from API:', errorData);
                 }
             } catch (error) {
                 console.error('Catch block error deleting prompt:', error);
@@ -1500,31 +1371,28 @@
             }
         }
 
-        // Search functionality (from Working.html - client-side filtering)
-        // Note: loadPrompts() now also supports sending search to backend if input has value then.
-        // You might want to choose one search method or combine them.
-        // For now, this client-side filter will run on whatever prompts are loaded.
-        function searchPrompts() {
+        function searchPrompts() { // Client-side search based on currently loaded prompts
             const searchTerm = searchInputEl.value.toLowerCase();
-            const promptCards = promptGridEl.querySelectorAll('.prompt-card');
-            
-            promptCards.forEach(card => {
-                const titleEl = card.querySelector('h3');
-                const contentEl = card.querySelector('p');
-                const title = titleEl ? titleEl.textContent.toLowerCase() : '';
-                const content = contentEl ? contentEl.textContent.toLowerCase() : '';
-                
-                if (title.includes(searchTerm) || content.includes(searchTerm)) {
-                    card.style.display = 'block'; // Or 'grid' or 'flex' depending on card's parent display
-                } else {
-                    card.style.display = 'none';
+            const allCards = promptGridEl.querySelectorAll('.prompt-card'); // Get all cards currently in grid
+        
+            // If you want to re-fetch from backend on every keyup, call loadPrompts() instead.
+            // This is client-side filtering of what's already loaded.
+            allCards.forEach(card => {
+                const promptId = card.dataset.promptId;
+                const prompt = prompts.find(p => p.id.toString() === promptId); // Find from full loaded prompts array
+                if (prompt) {
+                    const title = prompt.title.toLowerCase();
+                    const content = prompt.content.toLowerCase();
+                    if (title.includes(searchTerm) || content.includes(searchTerm)) {
+                        card.style.display = ''; // Or 'block', 'grid' etc. depending on card's natural display
+                    } else {
+                        card.style.display = 'none';
+                    }
                 }
             });
         }
-        // Add event listener to search input if not already via onkeyup
-        // searchInputEl.addEventListener('keyup', searchPrompts); // Redundant if onkeyup exists
-
-        // --- Drag and Drop Handlers (NEW) ---
+        
+        // --- Drag and Drop Handlers ---
         function handleDragOver(event) {
             event.preventDefault(); 
             if (event.currentTarget.classList.contains('directory-item')) {
@@ -1543,32 +1411,24 @@
             if (event.currentTarget.classList.contains('directory-item')) {
                 event.currentTarget.classList.remove('drag-over');
             }
-            
             if (!draggedPromptId || !targetFolderId) {
                 showNotification('Drag-drop error: Missing data.', 'error');
                 return;
             }
-            
-            // Find the original prompt to get its details for copying
             const originalPrompt = prompts.find(p => p.id.toString() === draggedPromptId.toString());
             if (!originalPrompt) {
                 showNotification('Original prompt not found for copying.', 'error');
                 return;
             }
-
             showNotification(`Copying '${originalPrompt.title}' to new folder...`, 'success');
-
             try {
-                // API endpoint for copying from server.js: POST /api/prompts/:id/copy with directory_id in body
                 const response = await apiCall(`/api/prompts/${originalPrompt.id}/copy`, {
                     method: 'POST',
                     body: JSON.stringify({ directory_id: parseInt(targetFolderId) })
                 });
-
                 if (response.ok) {
                     const newCopiedPrompt = await response.json();
                     showNotification(`Prompt copied as "${newCopiedPrompt.title}"!`, 'success');
-                    // If current view is 'all' or the target folder, refresh prompts to see the copy
                     if (currentDirectory === 'all' || currentDirectory === `folder-${targetFolderId}`) {
                         await loadPrompts();
                     }
@@ -1583,39 +1443,36 @@
             draggedPromptId = null; 
         }
         
-        // --- Modal Closing (from Working.html) ---
+        // --- Modal Closing ---
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
-                // event.target.style.display = 'none'; // Original from Working.html
-                closeModal(event.target.id); // Use our improved closeModal
+                closeModal(event.target.id); 
             }
         }
 
-        // --- Initial Load (from Working.html, adapted) ---
+        // --- Initial Load ---
         document.addEventListener('DOMContentLoaded', async function() {
             const savedToken = localStorage.getItem('token');
             const savedUser = localStorage.getItem('user');
-            
             if (savedToken && savedUser) {
                 try {
                     authToken = savedToken;
                     currentUser = JSON.parse(savedUser);
-                    
-                    // Verify token by trying to fetch initial data
-                    // loadDirectories will use apiCall which has auth header
-                    // A failure in loadDirectories (e.g. 401) should trigger logout via apiCall's error handling
+                    if (!userEmailDisplayEl || !loginScreenEl || !appContainerEl) {
+                        console.error("Essential UI elements not found on DOMContentLoaded!");
+                        return;
+                    }
                     userEmailDisplayEl.textContent = currentUser.email;
                     loginScreenEl.style.display = 'none';
                     appContainerEl.style.display = 'flex';
                     await loadInitialData();
-
-                } catch (error) { // This catch might be for JSON.parse or if loadInitialData throws early
+                } catch (error) { 
                     console.warn("Error during initial auth check/load:", error);
-                    logout(); // If anything fails (e.g. JSON.parse, or error from loadInitialData if not caught by apiCall)
+                    logout(); 
                 }
             } else {
-                loginScreenEl.style.display = 'flex'; // Show login if no token
-                appContainerEl.style.display = 'none';
+                if(loginScreenEl) loginScreenEl.style.display = 'flex'; 
+                if(appContainerEl) appContainerEl.style.display = 'none';
             }
         });
     </script>
