@@ -1,0 +1,23 @@
+services:
+  # Web service
+  - type: web
+    name: prompt-manager
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prompt-manager-db
+          property: connectionString
+
+databases:
+  # PostgreSQL database
+  - name: prompt-manager-db
+    databaseName: prompt_manager
+    user: prompt_user
+    plan: free
