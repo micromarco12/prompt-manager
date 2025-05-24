@@ -570,7 +570,9 @@
                     <span class="directory-icon">👤</span>
                     <span>My Prompts</span>
                 </div>
-                <div class="directory-item" onclick="selectDirectory(this, 'shared')">
+                <div class="directory-item" onclick="selectDirectory(this, 'shared')" 
+                     ondragover="handleDragOver(event)" 
+                     ondrop="handleDrop(event, 'shared')">
                     <span class="directory-icon">👥</span>
                     <span>Shared Prompts</span>
                 </div>
@@ -876,6 +878,19 @@
             const card = document.createElement('div');
             card.className = 'prompt-card';
             card.onclick = () => viewPrompt(prompt);
+            card.draggable = true;
+            card.dataset.promptId = prompt.id;
+            
+            // Add drag event listeners
+            card.ondragstart = (e) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('promptId', prompt.id);
+                card.style.opacity = '0.5';
+            };
+            
+            card.ondragend = (e) => {
+                card.style.opacity = '1';
+            };
             
             const truncatedContent = prompt.content.length > 100 
                 ? prompt.content.substring(0, 100) + '...' 
@@ -966,7 +981,8 @@
         function copyPrompt() {
             const content = document.getElementById('viewPromptContent').value;
             navigator.clipboard.writeText(content).then(() => {
-                alert('Prompt copied to clipboard!');
+                // Show temporary success message instead of alert
+                showCopySuccess();
             }).catch(err => {
                 console.error('Error copying to clipboard:', err);
                 // Fallback for older browsers
@@ -976,15 +992,39 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                alert('Prompt copied to clipboard!');
+                showCopySuccess();
             });
+        }
+
+        // Show copy success message
+        function showCopySuccess() {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #4CAF50;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            message.textContent = 'Copied to clipboard!';
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                message.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => document.body.removeChild(message), 300);
+            }, 2000);
         }
 
         function copyPromptDirect(promptId) {
             const prompt = prompts.find(p => p.id === promptId);
             if (prompt) {
                 navigator.clipboard.writeText(prompt.content).then(() => {
-                    alert('Prompt copied to clipboard!');
+                    showCopySuccess();
                 }).catch(err => {
                     // Fallback for older browsers
                     const textarea = document.createElement('textarea');
@@ -993,7 +1033,7 @@
                     textarea.select();
                     document.execCommand('copy');
                     document.body.removeChild(textarea);
-                    alert('Prompt copied to clipboard!');
+                    showCopySuccess();
                 });
             }
         }
