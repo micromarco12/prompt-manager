@@ -175,7 +175,7 @@ app.get('/api/prompts', auth, async (req,res)=>{
       q+=' AND d.is_shared=TRUE';
     }else if(directory_id){
       params.push(directory_id);
-      q+=\` AND p.directory_id=$\${params.length}\`;
+     q += ` AND p.directory_id=$${params.length}`;
     }
     q+=' ORDER BY p.updated_at DESC';
     const {rows}=await pool.query(q,params);
