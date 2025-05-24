@@ -696,14 +696,63 @@
             ];
         }
 
-        // Login functionality
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+// Login functionality
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            currentUser = {
+                email: data.user.email,
+                role: data.user.role,
+                token: data.token
+            };
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
             
-            // Simple demo authentication
-            if (email && password) {
+            document.getElementById('userEmail').textContent = email;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+            initializeDemoData();
+            loadPrompts();
+        } else {
+            // First time? Try to register
+            if (data.error === 'Invalid credentials') {
+                const registerResponse = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (registerResponse.ok) {
+                    // Now login with the new account
+                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                } else {
+                    alert('Login failed. Please check your credentials.');
+                }
+            } else {
+                alert(data.error || 'Login failed');
+            }
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        alert('Connection error. Please try again.');
+    }
+});
                 currentUser = {
                     email: email,
                     role: email.includes('admin') ? 'admin' : 'user'
