@@ -111,44 +111,26 @@ app.get('/api/directories', auth, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
-// ... (existing directory routes remain unchanged) ...
-
-/* ────────────────────  PROMPT ROUTES  ──────────────────── */
-app.get('/api/prompts', auth, async (req, res) => {
-  const { user_only, directory } = req.query;
+app.post('/api/directories', auth, async (req, res) => {
+  const { name, parent_id = null, is_shared = false } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
   try {
-    let query = `
-      SELECT p.*, u.email AS author_email FROM prompts p
-      JOIN directories d ON d.id = p.directory_id
-      JOIN users u ON u.id = p.user_id WHERE 1=1`;
-    const params = [];
-
-    if (user_only === 'true') {
-      params.push(req.user.id);
-      query += ` AND p.user_id = $${params.length}`;
-    }
-
-    if (directory) {
-      params.push(directory);
-      query += ` AND d.name = $${params.length}`;
-    }
-
-    query += ' ORDER BY p.updated_at DESC';
-    const { rows } = await pool.query(query, params);
-    res.json(rows);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
-  }
+    const { rows } = await pool.query(
+      `INSERT INTO directories(name, parent_id, user_id, is_shared) VALUES($1,$2,$3,$4) RETURNING *`,
+      [name, parent_id, req.user.id, is_shared]
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
-// ... (other prompt routes remain unchanged) ...
-
-/* ───────────────────  FRONT-END HAND-OFF  ─────────────────── */
-app.get('/', (_, res) => res.sendFile(__dirname + '/public/index.html'));
-
-/* ─────────────────────  START SERVER  ───────────────────── */
-app.listen(PORT, async () => {
-  await initialiseDb();
-  console.log(`🚀 Prompt-Manager running on ${PORT}`);
+app.delete('/api/directories/:id', auth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query('SELECT user_id FROM directories WHERE id=$1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin')
+      return res.status(403).json({ error: 'Unauthorised' });
+    await pool.query('DELETE FROM directories WHERE id=$1', [id]);
+    res.json({ message: 'Directory deleted' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
