@@ -1,1457 +1,555 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prompt Manager</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #0a0a0a;
-            color: #e0e0e0;
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-        /* Login Screen */
-        .login-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0a 100%);
-        }
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public')); // Serve static files from 'public' directory
 
-        .login-box {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 40px;
-            width: 400px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            animation: fadeInUp 0.6s ease-out;
-        }
+// Database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-that-should-be-in-env';
 
-        .login-box h2 {
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 28px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied, no token provided' });
+  }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #b0b0b0;
-            font-size: 14px;
-        }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.error('JWT verification error:', err.message);
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user; // Add user payload to request object
+    next();
+  });
+};
 
-        .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #e0e0e0;
-            font-size: 15px;
-            transition: all 0.3s ease;
-        }
+// Initialize database tables if they don't exist
+async function initializeDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(50) DEFAULT 'user', -- 'user' or 'admin'
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        /* Main App */
-        .app-container {
-            display: none; /* Initially hidden, shown after login */
-            height: 100vh;
-            display: flex;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: #111111;
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-header h1 {
-            font-size: 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .user-info {
-            padding: 15px 20px;
-            background: rgba(102, 126, 234, 0.1);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .user-info span {
-            font-size: 14px;
-            color: #b0b0b0;
-            word-break: break-all; /* Ensure long emails don't break layout */
-        }
-
-        .logout-btn {
-            padding: 6px 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .logout-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .new-folder-btn {
-            margin: 20px;
-            padding: 12px;
-            background: rgba(102, 126, 234, 0.2);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            border-radius: 8px;
-            color: #667eea;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .new-folder-btn:hover {
-            background: rgba(102, 126, 234, 0.3);
-            transform: translateY(-2px);
-        }
-
-        .directory-tree {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0 20px 20px 20px; /* Adjusted padding */
-        }
-
-        .directory-item {
-            padding: 10px 15px;
-            margin-bottom: 5px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: space-between; /* For delete button */
-            gap: 8px;
-        }
-        .directory-item-name-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-grow: 1; /* Allow name to take available space */
-        }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS directories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        parent_id INTEGER REFERENCES directories(id) ON DELETE CASCADE, -- If parent is deleted, delete child
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE NOT NULL, -- If user is deleted, delete their directories
+        is_shared BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (name, parent_id, user_id) -- Allow same name in different folders or for different users
+      )
+    `);
+    // Add an index for frequently queried columns
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_directories_user_id ON directories(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_directories_is_shared ON directories(is_shared);`);
 
 
-        .directory-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .directory-item:hover .delete-folder-btn {
-            opacity: 1;
-        }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS prompts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        directory_id INTEGER REFERENCES directories(id) ON DELETE CASCADE, -- If directory is deleted, delete its prompts
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE NOT NULL, -- If user is deleted, delete their prompts
+        tags TEXT[],
+        is_restricted BOOLEAN DEFAULT false, -- If true, only owner or admin can see, even in shared folder
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    // Add indexes for frequently queried columns
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_prompts_user_id ON prompts(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_prompts_directory_id ON prompts(directory_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_prompts_tags ON prompts USING GIN(tags);`); // GIN index for array search
 
+    console.log('Database initialized successfully (tables checked/created).');
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    // Consider whether to exit the process if DB init fails critically
+  }
+}
 
-        .directory-item.active {
-            background: rgba(102, 126, 234, 0.2);
-            border-left: 3px solid #667eea;
-        }
+// --- User Routes ---
+app.post('/api/register', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
 
-        .directory-icon {
-            font-size: 18px;
-        }
-        .delete-folder-btn {
-            background: none;
-            border: none;
-            color: #ff6b6b; /* A reddish color for delete */
-            font-size: 14px;
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 4px;
-            opacity: 0.6; /* Slightly transparent until hover */
-            transition: opacity 0.2s ease, background-color 0.2s ease;
-        }
-        .delete-folder-btn:hover {
-            background-color: rgba(255, 107, 107, 0.2); /* Light red background on hover */
-            opacity: 1;
-        }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, role',
+      [email, hashedPassword]
+    );
+    const user = result.rows[0];
 
+    // Create a default "My Prompts" directory for the new user
+    await pool.query(
+        'INSERT INTO directories (name, user_id, is_shared) VALUES ($1, $2, $3)',
+        ['My Prompts', user.id, false]
+    );
 
-        .sub-directory {
-            margin-left: 25px;
-            margin-top: 5px;
-        }
+    res.status(201).json({ message: 'User created successfully', user });
+  } catch (error) {
+    if (error.code === '23505') { // Unique violation (email already exists)
+      res.status(409).json({ error: 'Email already exists' });
+    } else {
+      console.error('Register error:', error);
+      res.status(500).json({ error: 'Server error during registration' });
+    }
+  }
+});
 
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #0a0a0a;
-        }
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
 
-        .content-header {
-            padding: 20px 30px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
 
-        .content-header h2 {
-            font-size: 20px;
-            color: #e0e0e0;
-        }
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
-        .actions {
-            display: flex;
-            gap: 15px;
-        }
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
-        .action-btn {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' } // Token expires in 24 hours
+    );
 
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-        }
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, role: user.role }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error during login' });
+  }
+});
 
-        .search-bar-container { /* Added container for search bar */
-            padding: 20px 30px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
+// --- Directory Routes ---
+app.post('/api/directories', authenticateToken, async (req, res) => {
+  try {
+    const { name, parent_id, is_shared } = req.body;
+    const user_id = req.user.id;
 
-        .search-bar {
-            padding: 15px 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+    if (!name) {
+      return res.status(400).json({ error: 'Directory name is required' });
+    }
 
-        .search-bar input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: #e0e0e0;
-            font-size: 15px;
-            outline: none;
-        }
-
-        .search-bar input::placeholder {
-            color: #666;
-        }
-
-        /* Prompt Grid */
-        .prompt-grid {
-            padding: 30px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .prompt-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            display: flex; /* For better content structuring */
-            flex-direction: column; /* Stack content vertically */
-        }
-
-        .prompt-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.1) 100%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .prompt-card:hover::before {
-            opacity: 1;
-        }
-
-        .prompt-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        }
-
-        .prompt-card h3 {
-            margin-bottom: 10px;
-            color: #e0e0e0;
-            font-size: 18px;
-        }
-
-        .prompt-card p {
-            color: #999;
-            font-size: 14px;
-            line-height: 1.5;
-            margin-bottom: 15px;
-            flex-grow: 1; /* Allow text to take available space */
-            overflow: hidden; /* Prevent long text from breaking layout */
-            text-overflow: ellipsis; /* Add ellipsis for overflow */
-            /* Consider limiting lines with -webkit-line-clamp if needed */
-        }
-
-        .prompt-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            color: #666;
-            margin-top: auto; /* Push meta to the bottom */
-        }
-
-        .prompt-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .prompt-action {
-            padding: 5px 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: 5px;
-            color: #e0e0e0;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .prompt-action.delete { /* Specific style for delete button */
-            background-color: rgba(255, 107, 107, 0.1); /* Light red */
-            color: #ff6b6b;
-        }
-
-        .prompt-action:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        .prompt-action.delete:hover {
-            background-color: rgba(255, 107, 107, 0.3);
-        }
-
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            animation: fadeIn 0.3s ease;
-            align-items: center; /* Vertically center */
-            justify-content: center; /* Horizontally center */
-        }
-
-        .modal-content {
-            /* position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); */ /* Replaced by flex centering on .modal */
-            background: #1a1a1a;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 30px;
-            width: 90%;
-            max-width: 600px;
-            animation: slideIn 0.3s ease;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateY(-30px) scale(0.95); /* Adjusted for smoother entry */
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0) scale(1);
-                opacity: 1;
+    // Optional: Check if parent_id belongs to the current user if provided
+    if (parent_id) {
+        const parentDirResult = await pool.query('SELECT user_id FROM directories WHERE id = $1', [parent_id]);
+        if (parentDirResult.rows.length === 0 || parentDirResult.rows[0].user_id !== user_id) {
+            // If parent_id is for a shared folder not owned by user, disallow creating subfolder
+            // This logic might need adjustment based on sharing rules for subfolders
+            // For now, only allow subfolders in own directories.
+            const parentDir = await pool.query('SELECT user_id, is_shared FROM directories WHERE id = $1', [parent_id]);
+            if (parentDir.rows.length === 0 || (parentDir.rows[0].user_id !== user_id && !parentDir.rows[0].is_shared)) {
+                 return res.status(403).json({ error: 'Cannot create subdirectory in a directory you do not own or is not shared.' });
             }
         }
+    }
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
+
+    const result = await pool.query(
+      `INSERT INTO directories (name, parent_id, user_id, is_shared)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [name, parent_id || null, user_id, is_shared || false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+     if (error.code === '23505') { // unique_violation
+        res.status(409).json({ error: 'A directory with this name already exists in the selected location for your account.' });
+    } else {
+        console.error('Create directory error:', error);
+        res.status(500).json({ error: 'Server error creating directory' });
+    }
+  }
+});
+
+app.get('/api/directories', authenticateToken, async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    // Fetch user's own directories AND any directories marked as shared by anyone
+    const result = await pool.query(
+      `SELECT d.*, u.email as owner_email 
+       FROM directories d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.user_id = $1 OR d.is_shared = true
+       ORDER BY d.name`, // Consider ordering by parent_id then name for tree structure
+      [user_id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get directories error:', error);
+    res.status(500).json({ error: 'Server error fetching directories' });
+  }
+});
+
+app.put('/api/directories/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { name, parent_id, is_shared } = req.body;
+    const user_id = req.user.id;
+
+    if (!name) {
+        return res.status(400).json({ error: 'Directory name is required' });
+    }
+
+    try {
+        // Check if the directory exists and belongs to the user
+        const dirCheck = await pool.query('SELECT * FROM directories WHERE id = $1 AND user_id = $2', [id, user_id]);
+        if (dirCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Directory not found or you do not have permission to edit it.' });
         }
 
-        .modal-header h3 {
-            font-size: 22px;
-            color: #e0e0e0;
+        // Prevent moving a directory into itself or its own descendants (more complex check needed for full protection)
+        if (parent_id && parseInt(parent_id) === parseInt(id)) {
+            return res.status(400).json({ error: 'Cannot move a directory into itself.' });
         }
+        // Add more checks if parent_id is a descendant
 
-        .close-modal {
-            background: none;
-            border: none;
-            color: #999;
-            font-size: 24px;
-            cursor: pointer;
-            transition: color 0.3s ease;
+        const result = await pool.query(
+            `UPDATE directories 
+             SET name = $1, parent_id = $2, is_shared = $3, updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $4 AND user_id = $5
+             RETURNING *`,
+            [name, parent_id || null, is_shared || false, id, user_id]
+        );
+
+        if (result.rows.length === 0) {
+             return res.status(404).json({ error: 'Directory not found or update failed.' });
         }
-
-        .close-modal:hover {
-            color: #e0e0e0;
+        res.json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') { // unique_violation
+            res.status(409).json({ error: 'A directory with this name already exists in the selected location for your account.' });
+        } else {
+            console.error('Update directory error:', error);
+            res.status(500).json({ error: 'Server error updating directory' });
         }
-
-        .modal-body {
-            margin-bottom: 20px;
-        }
-
-        .modal-body input,
-        .modal-body textarea,
-        .modal-body select {
-            width: 100%;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #e0e0e0;
-            font-size: 15px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-        }
-
-        .modal-body textarea {
-            min-height: 150px;
-            resize: vertical;
-        }
-
-        .modal-body input:focus,
-        .modal-body textarea:focus,
-        .modal-body select:focus {
-            outline: none;
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 15px;
-        }
-
-        .modal-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .modal-btn.primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .modal-btn.secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #e0e0e0;
-        }
-
-        .modal-btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .loading-message, .empty-message { /* Combined for styling */
-            padding: 20px;
-            text-align: center;
-            color: #999;
-            font-style: italic;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                left: 0;
-                top: 0;
-                height: 100%;
-                z-index: 100;
-                transform: translateX(-100%);
-                box-shadow: 5px 0 15px rgba(0,0,0,0.3); /* Add shadow when open */
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .prompt-grid {
-                grid-template-columns: 1fr;
-                padding: 20px; /* Adjust padding for smaller screens */
-            }
-            .content-header, .search-bar-container {
-                padding-left: 20px;
-                padding-right: 20px;
-            }
-            .actions {
-                gap: 10px; /* Reduce gap for smaller screens */
-            }
-            .action-btn {
-                padding: 8px 15px; /* Smaller buttons */
-                font-size: 13px;
-            }
-            .modal-content {
-                width: 95%; /* More width on small screens */
-            }
-        }
-        /* Hamburger menu for mobile */
-        .hamburger-menu {
-            display: none; /* Hidden by default */
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 101; /* Above sidebar */
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px;
-            padding: 10px;
-            cursor: pointer;
-        }
-        .hamburger-menu svg {
-            width: 24px;
-            height: 24px;
-            fill: #e0e0e0;
-        }
-        @media (max-width: 768px) {
-            .hamburger-menu {
-                display: block;
-            }
-            .main-content .content-header {
-                padding-left: 60px; /* Make space for hamburger */
-            }
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(102, 126, 234, 0.5);
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(102, 126, 234, 0.7);
-        }
-
-    </style>
-</head>
-<body>
-    <div class="login-container" id="loginScreen">
-        <div class="login-box">
-            <h2>Prompt Manager</h2>
-            <form id="loginForm">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" required placeholder="Enter your email">
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" required placeholder="Enter your password">
-                </div>
-                <button type="submit" class="login-btn">Login</button>
-            </form>
-            <p style="margin-top: 20px; text-align: center; color: #666; font-size: 14px;">
-                First time? Enter email & password to auto-register.
-            </p>
-        </div>
-    </div>
-
-    <div class="app-container" id="appContainer" style="display: none;">
-        <div class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
-            <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path></svg>
-        </div>
-
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1>統 Prompt Library</h1>
-            </div>
-            <div class="user-info">
-                <span id="userEmail">user@company.com</span>
-                <button class="logout-btn" onclick="logout()">Logout</button>
-            </div>
-            <button class="new-folder-btn" onclick="showNewFolderModal()">
-                <span>刀</span> New Folder
-            </button>
-            <div class="directory-tree" id="directoryTree">
-                <div class="directory-item active" data-id="all" onclick="selectDirectory(this, 'all', 'All Prompts')">
-                     <div class="directory-item-name-container">
-                        <span class="directory-icon">答</span>
-                        <span>All Prompts</span>
-                    </div>
-                </div>
-                </div>
-        </div>
-
-        <div class="main-content">
-            <div class="content-header">
-                <h2 id="currentDirectoryName">All Prompts</h2>
-                <div class="actions">
-                    <button class="action-btn" onclick="showNewPromptModal()">
-                        <span>筐/span> New Prompt
-                    </button>
-                </div>
-            </div>
-            <div class="search-bar-container">
-                <div class="search-bar">
-                    <span>剥</span>
-                    <input type="text" placeholder="Search prompts..." id="searchInput" onkeyup="searchPrompts()">
-                </div>
-            </div>
-            <div class="prompt-grid" id="promptGrid">
-                <div class="loading-message">Loading prompts...</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="promptModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="promptModalTitle">Create New Prompt</h3>
-                <button class="close-modal" onclick="closeModal('promptModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="promptId"> <input type="text" id="promptTitle" placeholder="Prompt Title">
-                <textarea id="promptContent" placeholder="Enter your prompt here..."></textarea>
-                <label for="promptDirectorySelect" style="display: block; margin-bottom: 8px; color: #b0b0b0; font-size: 14px;">Directory</label>
-                <select id="promptDirectorySelect">
-                    </select>
-                <label for="promptTags" style="display: block; margin-bottom: 8px; margin-top: 15px; color: #b0b0b0; font-size: 14px;">Tags (comma separated)</label>
-                <input type="text" id="promptTags" placeholder="e.g., marketing, code, creative">
-                 <div style="margin-top: 15px;">
-                    <input type="checkbox" id="promptIsRestricted" style="width: auto; margin-right: 8px;">
-                    <label for="promptIsRestricted" style="color: #b0b0b0; font-size: 14px;">Restrict to Admins (if in shared folder)</label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="modal-btn secondary" onclick="closeModal('promptModal')">Cancel</button>
-                <button class="modal-btn primary" id="savePromptBtn" onclick="saveOrUpdatePrompt()">Save Prompt</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="newFolderModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Folder</h3>
-                <button class="close-modal" onclick="closeModal('newFolderModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="text" id="folderName" placeholder="Folder Name">
-                <label for="parentDirectorySelect" style="display: block; margin-bottom: 8px; color: #b0b0b0; font-size: 14px;">Parent Directory (optional)</label>
-                <select id="parentDirectorySelect">
-                    <option value="">Root (No Parent)</option>
-                    </select>
-                 <div style="margin-top: 15px;">
-                    <input type="checkbox" id="folderIsShared" style="width: auto; margin-right: 8px;">
-                    <label for="folderIsShared" style="color: #b0b0b0; font-size: 14px;">Make this a Shared Folder</label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="modal-btn secondary" onclick="closeModal('newFolderModal')">Cancel</button>
-                <button class="modal-btn primary" onclick="createFolder()">Create Folder</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="viewPromptModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="viewPromptTitle">Prompt Title</h3>
-                <button class="close-modal" onclick="closeModal('viewPromptModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <textarea id="viewPromptContent" style="min-height: 300px;" readonly></textarea>
-                <div style="margin-top: 15px;">
-                    <small id="viewPromptMeta" style="color: #666;"></small><br>
-                    <small id="viewPromptTags" style="color: #888;"></small>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="modal-btn secondary" onclick="copyPromptContent()">Copy to Clipboard</button>
-                <button class="modal-btn primary" id="editPromptBtnViewModal" onclick="prepareEditPrompt()">Edit</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="customAlertModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="customAlertTitle">Alert</h3>
-                <button class="close-modal" onclick="closeModal('customAlertModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p id="customAlertMessage">This is an alert message.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="modal-btn primary" onclick="closeModal('customAlertModal')">OK</button>
-            </div>
-        </div>
-    </div>
-
-
-    <script>
-        // Global variables
-        let currentUser = null;
-        let prompts = [];
-        let directories = [];
-        let selectedDirectoryId = 'all'; // Can be 'all', 'my-prompts', 'shared', or a specific directory ID
-        let authToken = null;
-        let currentEditingPrompt = null; // To store prompt data when editing
-
-        const API_BASE_URL = ''; // Assuming API is on the same origin
-
-        // --- DOM Elements ---
-        const loginScreen = document.getElementById('loginScreen');
-        const appContainer = document.getElementById('appContainer');
-        const userEmailDisplay = document.getElementById('userEmail');
-        const directoryTreeContainer = document.getElementById('directoryTree');
-        const promptGrid = document.getElementById('promptGrid');
-        const currentDirectoryNameDisplay = document.getElementById('currentDirectoryName');
-        const searchInput = document.getElementById('searchInput');
-
-        // Modal elements
-        const promptModal = document.getElementById('promptModal');
-        const promptModalTitle = document.getElementById('promptModalTitle');
-        const promptIdInput = document.getElementById('promptId');
-        const promptTitleInput = document.getElementById('promptTitle');
-        const promptContentInput = document.getElementById('promptContent');
-        const promptDirectorySelect = document.getElementById('promptDirectorySelect');
-        const promptTagsInput = document.getElementById('promptTags');
-        const promptIsRestrictedCheckbox = document.getElementById('promptIsRestricted');
-        const savePromptBtn = document.getElementById('savePromptBtn');
-
-        const newFolderModal = document.getElementById('newFolderModal');
-        const folderNameInput = document.getElementById('folderName');
-        const parentDirectorySelect = document.getElementById('parentDirectorySelect');
-        const folderIsSharedCheckbox = document.getElementById('folderIsShared');
-
-        const viewPromptModal = document.getElementById('viewPromptModal');
-        const viewPromptTitleDisplay = document.getElementById('viewPromptTitle');
-        const viewPromptContentDisplay = document.getElementById('viewPromptContent');
-        const viewPromptMetaDisplay = document.getElementById('viewPromptMeta');
-        const viewPromptTagsDisplay = document.getElementById('viewPromptTags');
-        const editPromptBtnViewModal = document.getElementById('editPromptBtnViewModal');
-
-        const customAlertModal = document.getElementById('customAlertModal');
-        const customAlertTitle = document.getElementById('customAlertTitle');
-        const customAlertMessage = document.getElementById('customAlertMessage');
-
-        // --- Utility Functions ---
-        function showCustomAlert(message, title = 'Alert') {
-            customAlertTitle.textContent = title;
-            customAlertMessage.textContent = message;
-            customAlertModal.style.display = 'flex';
-        }
-
-        async function apiCall(endpoint, options = {}) {
-            const headers = {
-                'Content-Type': 'application/json',
-                ...options.headers
-            };
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
-                if (response.status === 401) { // Unauthorized
-                    showCustomAlert('Session expired. Please log in again.', 'Unauthorized');
-                    logout();
-                    throw new Error('Unauthorized');
-                }
-                return response;
-            } catch (error) {
-                console.error(`API call to ${endpoint} failed:`, error);
-                if (!navigator.onLine) {
-                    showCustomAlert('Network error. Please check your internet connection.', 'Connection Error');
-                } else if (error.message !== 'Unauthorized') { // Avoid double alert for unauthorized
-                    showCustomAlert('An error occurred while communicating with the server.', 'Server Error');
-                }
-                throw error; // Re-throw to be caught by calling function if needed
-            }
-        }
-
-        // --- Authentication ---
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            try {
-                let response = await fetch(`${API_BASE_URL}/api/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                let data = await response.json();
-
-                if (response.ok) {
-                    loginSuccess(data, email);
-                } else if (response.status === 401) { // Invalid credentials, try to register
-                    const registerResponse = await fetch(`${API_BASE_URL}/api/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
-                    });
-                    const registerData = await registerResponse.json();
-                    if (registerResponse.ok) {
-                        // Registration successful, now login again
-                        response = await fetch(`${API_BASE_URL}/api/login`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email, password })
-                        });
-                        data = await response.json();
-                        if (response.ok) {
-                            loginSuccess(data, email);
-                        } else {
-                            showCustomAlert(data.error || 'Login failed after registration.', 'Login Error');
-                        }
-                    } else {
-                        showCustomAlert(registerData.error || 'Registration failed.', 'Registration Error');
-                    }
-                } else {
-                     showCustomAlert(data.error || 'Login failed.', 'Login Error');
-                }
-            } catch (error) {
-                console.error('Login/Register error:', error);
-                showCustomAlert('Connection error during login/registration. Please try again.', 'Connection Error');
-            }
-        });
-
-        function loginSuccess(data, email) {
-            authToken = data.token;
-            currentUser = data.user;
-            localStorage.setItem('authToken', authToken);
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            userEmailDisplay.textContent = currentUser.email; // Display full email
-            loginScreen.style.display = 'none';
-            appContainer.style.display = 'flex';
-            initializeAppData();
-        }
-
-        function logout() {
-            authToken = null;
-            currentUser = null;
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('currentUser');
-            loginScreen.style.display = 'flex';
-            appContainer.style.display = 'none';
-            document.getElementById('email').value = '';
-            document.getElementById('password').value = '';
-            directoryTreeContainer.innerHTML = ''; // Clear directories
-            promptGrid.innerHTML = ''; // Clear prompts
-             closeAllModals(); // Close any open modals
-        }
-
-        async function checkSession() {
-            authToken = localStorage.getItem('authToken');
-            const userString = localStorage.getItem('currentUser');
-            if (authToken && userString) {
-                currentUser = JSON.parse(userString);
-                try {
-                    // Make a lightweight API call to verify token validity
-                    await apiCall('/api/directories'); // Or any other protected route
-                    userEmailDisplay.textContent = currentUser.email;
-                    loginScreen.style.display = 'none';
-                    appContainer.style.display = 'flex';
-                    initializeAppData();
-                } catch (error) {
-                    // Token likely invalid or expired
-                    logout();
-                }
-            } else {
-                loginScreen.style.display = 'flex';
-                appContainer.style.display = 'none';
-            }
-        }
-        // --- Data Loading and Rendering ---
-        async function initializeAppData() {
-            await loadDirectories(); // Load directories first
-            await loadPrompts();     // Then load prompts (which might depend on selected directory)
-        }
-
-        async function loadDirectories() {
-            try {
-                const response = await apiCall('/api/directories');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                directories = await response.json();
-                renderDirectoryTree();
-                updateDirectoryDropdowns(); // For modals
-            } catch (error) {
-                console.error('Error loading directories:', error);
-                showCustomAlert('Failed to load directories.', 'Error');
-            }
-        }
-        function renderDirectoryTree() {
-            directoryTreeContainer.innerHTML = ''; // Clear existing tree
-
-            // Static "All Prompts" item
-            const allPromptsItem = createDirectoryElement({ id: 'all', name: 'All Prompts' }, '答');
-            if (selectedDirectoryId === 'all') allPromptsItem.classList.add('active');
-            directoryTreeContainer.appendChild(allPromptsItem);
-
-            // Filter for user's own directories (not shared by others, unless it's their own shared)
-            // and directories explicitly marked as shared
-            const userOwnedOrExplicitlySharedDirs = directories.filter(dir => dir.user_id === currentUser.id || dir.is_shared);
-
-            // Create a map for quick parent lookup
-            const directoryMap = new Map(userOwnedOrExplicitlySharedDirs.map(dir => [dir.id, {...dir, children: []}]));
-
-            // Build the tree structure
-            const rootDirectories = [];
-            userOwnedOrExplicitlySharedDirs.forEach(dir => {
-                if (dir.parent_id && directoryMap.has(dir.parent_id)) {
-                    directoryMap.get(dir.parent_id).children.push(directoryMap.get(dir.id));
-                } else if (!dir.parent_id) { // Only add root directories here
-                    rootDirectories.push(directoryMap.get(dir.id));
-                }
-            });
-            
-            // Render root directories and their children
-            rootDirectories.forEach(dir => renderDirectoryRecursive(dir, directoryTreeContainer, 0));
-        }
-
-        function renderDirectoryRecursive(directory, parentElement, depth) {
-            const directoryElement = createDirectoryElement(directory, directory.is_shared ? '則' : '側', depth > 0);
-            if (directory.id === selectedDirectoryId) {
-                 directoryElement.classList.add('active');
-            }
-            parentElement.appendChild(directoryElement);
-
-            if (directory.children && directory.children.length > 0) {
-                const subDirectoryContainer = document.createElement('div');
-                if (depth > 0) subDirectoryContainer.classList.add('sub-directory');
-                // Sort children alphabetically by name
-                directory.children.sort((a, b) => a.name.localeCompare(b.name));
-                directory.children.forEach(childDir => renderDirectoryRecursive(childDir, subDirectoryContainer, depth + 1));
-                parentElement.appendChild(subDirectoryContainer);
-            }
-        }
-
-
-        function createDirectoryElement(dir, iconText, isSubdirectory = false) {
-            const item = document.createElement('div');
-            item.className = 'directory-item';
-            if (isSubdirectory) item.style.paddingLeft = `${15 + (isSubdirectory ? 20 : 0)}px`; // Indent subdirectories
-            item.dataset.id = dir.id; // Store directory ID
-            item.dataset.name = dir.name; // Store directory name
-
-            const nameContainer = document.createElement('div');
-            nameContainer.className = 'directory-item-name-container';
-            nameContainer.onclick = () => selectDirectory(item, dir.id, dir.name);
-
-            const icon = document.createElement('span');
-            icon.className = 'directory-icon';
-            icon.textContent = iconText;
-            nameContainer.appendChild(icon);
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = dir.name;
-            nameContainer.appendChild(nameSpan);
-            item.appendChild(nameContainer);
-
-            // Add delete button for non-special directories owned by the user
-            if (dir.id !== 'all' && dir.user_id === currentUser.id) {
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-folder-btn';
-                deleteBtn.innerHTML = '&times;'; // A simple 'x' for delete
-                deleteBtn.title = `Delete folder "${dir.name}"`;
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent selectDirectory from firing
-                    deleteFolder(dir.id, dir.name);
-                };
-                item.appendChild(deleteBtn);
-            }
-            return item;
-        }
-
-
-        function updateDirectoryDropdowns() {
-            // For "Create/Edit Prompt" modal
-            promptDirectorySelect.innerHTML = '';
-            // For "Create Folder" modal (parent directory)
-            parentDirectorySelect.innerHTML = '<option value="">Root (No Parent)</option>';
-
-            const userDirectories = directories.filter(dir => dir.user_id === currentUser.id && !dir.is_shared);
-            const sharedDirectoriesByAnyone = directories.filter(dir => dir.is_shared);
-
-            // Populate prompt directory select (can save to own or shared folders)
-            if (userDirectories.length > 0) {
-                const myOptGroup = document.createElement('optgroup');
-                myOptGroup.label = "My Folders";
-                userDirectories.forEach(dir => {
-                    if (!dir.parent_id) { // Only top-level for now, or implement nesting
-                        const option = document.createElement('option');
-                        option.value = dir.id;
-                        option.textContent = dir.name;
-                        myOptGroup.appendChild(option);
-                    }
-                });
-                promptDirectorySelect.appendChild(myOptGroup);
-            }
-
-            if (sharedDirectoriesByAnyone.length > 0) {
-                 const sharedOptGroup = document.createElement('optgroup');
-                 sharedOptGroup.label = "Shared Folders";
-                 sharedDirectoriesByAnyone.forEach(dir => {
-                    const option = document.createElement('option');
-                    option.value = dir.id;
-                    option.textContent = dir.name + (dir.user_id !== currentUser.id ? ` (by ${directories.find(u=>u.id === dir.user_id)?.name || 'another user'})` : '');
-                    sharedOptGroup.appendChild(option);
-                 });
-                 promptDirectorySelect.appendChild(sharedOptGroup);
-            }
-
-
-            // Populate parent directory select for creating new folders (only user's own non-shared folders)
-            userDirectories.forEach(dir => {
-                 if (!dir.parent_id) { // Only allow placing new folders in root of user's own folders for simplicity
-                    const option = document.createElement('option');
-                    option.value = dir.id;
-                    option.textContent = dir.name;
-                    parentDirectorySelect.appendChild(option);
-                 }
-            });
-        }
-
-        function selectDirectory(element, directoryId, directoryName) {
-            document.querySelectorAll('.directory-item').forEach(item => item.classList.remove('active'));
-            if (element) element.classList.add('active'); // element might be null if called programmatically
-
-            selectedDirectoryId = directoryId;
-            currentDirectoryNameDisplay.textContent = directoryName || 'All Prompts';
-            loadPrompts();
-        }
-
-        async function loadPrompts() {
-            promptGrid.innerHTML = '<div class="loading-message">Loading prompts...</div>';
-            try {
-                let url = `${API_BASE_URL}/api/prompts`;
-                const params = new URLSearchParams();
-
-                if (selectedDirectoryId && selectedDirectoryId !== 'all') {
-                    params.append('directory_id', selectedDirectoryId);
-                }
-                // Add search term if present
-                const searchTerm = searchInput.value.trim();
-                if (searchTerm) {
-                    params.append('search', searchTerm);
-                }
-
-                if (params.toString()) {
-                    url += `?${params.toString()}`;
-                }
-
-                const response = await apiCall(url);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                prompts = await response.json();
-                renderPrompts(prompts);
-            } catch (error) {
-                console.error('Error loading prompts:', error);
-                promptGrid.innerHTML = '<div class="empty-message">Error loading prompts. Please try again.</div>';
-            }
-        }
-
-        function renderPrompts(promptsToRender) {
-            promptGrid.innerHTML = '';
-            if (promptsToRender.length === 0) {
-                promptGrid.innerHTML = '<div class="empty-message">No prompts found. Create one or try a different folder/search.</div>';
-            } else {
-                promptsToRender.forEach(prompt => {
-                    const card = createPromptCard(prompt);
-                    promptGrid.appendChild(card);
-                });
-            }
-        }
-
-        function createPromptCard(prompt) {
-            const card = document.createElement('div');
-            card.className = 'prompt-card';
-            card.onclick = () => viewPromptDetails(prompt); // Changed from viewPrompt
-
-            const truncatedContent = prompt.content.length > 100
-                ? prompt.content.substring(0, 100) + '...'
-                : prompt.content;
-
-            card.innerHTML = `
-                <h3>${prompt.title || 'Untitled Prompt'}</h3>
-                <p title="${prompt.content}">${truncatedContent}</p> <div class="prompt-meta">
-                    <span>By: ${prompt.author_email || 'Unknown'}</span>
-                    <div class="prompt-actions">
-                        <button class="prompt-action" onclick="event.stopPropagation(); copyPromptContentById(${prompt.id})">Copy</button>
-                        ${(prompt.user_id === currentUser.id || currentUser.role === 'admin') ?
-                            `<button class="prompt-action delete" onclick="event.stopPropagation(); deletePrompt(${prompt.id}, '${prompt.title}')">Delete</button>` : ''}
-                    </div>
-                </div>
-            `;
-            return card;
-        }
-        // --- Modal Management ---
-        function openModal(modalId) {
-            document.getElementById(modalId).style.display = 'flex'; // Use flex for centering
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-        function closeAllModals() {
-            document.querySelectorAll('.modal').forEach(modal => modal.style.display = 'none');
-        }
-
-
-        // --- Prompt Actions ---
-        function showNewPromptModal() {
-            currentEditingPrompt = null; // Clear any previous editing state
-            promptModalTitle.textContent = 'Create New Prompt';
-            savePromptBtn.textContent = 'Save Prompt';
-            promptIdInput.value = '';
-            promptTitleInput.value = '';
-            promptContentInput.value = '';
-            promptTagsInput.value = '';
-            promptIsRestrictedCheckbox.checked = false;
-            // Set default directory if possible
-            if (selectedDirectoryId && selectedDirectoryId !== 'all') {
-                promptDirectorySelect.value = selectedDirectoryId;
-            } else if (promptDirectorySelect.options.length > 0) {
-                promptDirectorySelect.selectedIndex = 0; // Default to the first available directory
-            }
-            openModal('promptModal');
-        }
-
-        async function saveOrUpdatePrompt() {
-            const id = promptIdInput.value;
-            const title = promptTitleInput.value.trim();
-            const content = promptContentInput.value.trim();
-            const directory_id = promptDirectorySelect.value;
-            const tags = promptTagsInput.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-            const is_restricted = promptIsRestrictedCheckbox.checked;
-
-            if (!title || !content || !directory_id) {
-                showCustomAlert('Title, content, and directory are required.', 'Validation Error');
-                return;
-            }
-
-            const promptData = { title, content, directory_id: parseInt(directory_id), tags, is_restricted };
-            const method = id ? 'PUT' : 'POST';
-            const endpoint = id ? `${API_BASE_URL}/api/prompts/${id}` : `${API_BASE_URL}/api/prompts`;
-
-            try {
-                const response = await apiCall(endpoint, { method, body: JSON.stringify(promptData) });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                }
-                await loadPrompts(); // Refresh prompt list
-                closeModal('promptModal');
-                showCustomAlert(`Prompt ${id ? 'updated' : 'saved'} successfully!`, 'Success');
-            } catch (error) {
-                console.error(`Error ${id ? 'updating' : 'saving'} prompt:`, error);
-                showCustomAlert(`Error ${id ? 'updating' : 'saving'} prompt: ${error.message}`, 'Error');
-            }
-        }
-        function viewPromptDetails(prompt) {
-            currentEditingPrompt = prompt; // Store for potential edit
-            viewPromptTitleDisplay.textContent = prompt.title;
-            viewPromptContentDisplay.value = prompt.content;
-            let metaText = `Created by: ${prompt.author_email || 'Unknown'} on ${new Date(prompt.created_at).toLocaleDateString()}`;
-            if (prompt.directory_name) {
-                metaText += ` | In: ${prompt.directory_name}`;
-            }
-            viewPromptMetaDisplay.textContent = metaText;
-            viewPromptTagsDisplay.textContent = `Tags: ${prompt.tags && prompt.tags.length > 0 ? prompt.tags.join(', ') : 'None'}`;
-
-            // Show/hide edit button based on ownership/role
-            if (prompt.user_id === currentUser.id || currentUser.role === 'admin') {
-                editPromptBtnViewModal.style.display = 'inline-block';
-            } else {
-                editPromptBtnViewModal.style.display = 'none';
-            }
-            openModal('viewPromptModal');
-        }
-
-        function prepareEditPrompt() {
-            if (!currentEditingPrompt) return;
-            closeModal('viewPromptModal'); // Close the view modal
-
-            promptModalTitle.textContent = 'Edit Prompt';
-            savePromptBtn.textContent = 'Update Prompt';
-            promptIdInput.value = currentEditingPrompt.id;
-            promptTitleInput.value = currentEditingPrompt.title;
-            promptContentInput.value = currentEditingPrompt.content;
-            promptDirectorySelect.value = currentEditingPrompt.directory_id;
-            promptTagsInput.value = currentEditingPrompt.tags ? currentEditingPrompt.tags.join(', ') : '';
-            promptIsRestrictedCheckbox.checked = currentEditingPrompt.is_restricted || false;
-            openModal('promptModal');
-        }
-
-
-        function copyToClipboard(text) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text)
-                    .then(() => showCustomAlert('Copied to clipboard!', 'Success'))
-                    .catch(err => {
-                        console.error('Failed to copy with navigator.clipboard:', err);
-                        fallbackCopyTextToClipboard(text);
-                    });
-            } else {
-                fallbackCopyTextToClipboard(text);
-            }
-        }
-
-        function fallbackCopyTextToClipboard(text) {
-            const textArea = document.createElement("textarea");
-            textArea.value = text;
-            textArea.style.position = "fixed"; // Prevent scrolling to bottom of page in MS Edge.
-            textArea.style.top = "0";
-            textArea.style.left = "0";
-            textArea.style.opacity = "0"; // Hide it
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    showCustomAlert('Copied to clipboard! (fallback)', 'Success');
-                } else {
-                    showCustomAlert('Failed to copy.', 'Error');
-                }
-            } catch (err) {
-                console.error('Fallback copy failed:', err);
-                showCustomAlert('Failed to copy using fallback method.', 'Error');
-            }
-            document.body.removeChild(textArea);
-        }
-
-
-        function copyPromptContent() { // From view modal
-            const content = viewPromptContentDisplay.value;
-            copyToClipboard(content);
-        }
-
-        function copyPromptContentById(promptId) { // Direct from card
-            const prompt = prompts.find(p => p.id === promptId);
-            if (prompt) {
-                copyToClipboard(prompt.content);
-            }
-        }
-
-        async function deletePrompt(promptId, promptTitle) {
-            // Replace standard confirm with custom modal if desired, for now using confirm
-            if (window.confirm(`Are you sure you want to delete the prompt "${promptTitle || 'this prompt'}"? This action cannot be undone.`)) {
-                try {
-                    const response = await apiCall(`${API_BASE_URL}/api/prompts/${promptId}`, { method: 'DELETE' });
-                    if (!response.ok) {
-                         const errorData = await response.json();
-                         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                    }
-                    showCustomAlert('Prompt deleted successfully.', 'Success');
-                    await loadPrompts(); // Refresh list
-                } catch (error) {
-                    console.error('Error deleting prompt:', error);
-                    showCustomAlert(`Error deleting prompt: ${error.message}`, 'Error');
-                }
-            }
-        }
-
-        // --- Folder Actions ---
-        function showNewFolderModal() {
-            folderNameInput.value = '';
-            folderIsSharedCheckbox.checked = false;
-            // Set parent directory dropdown, default to no parent
-            if (parentDirectorySelect.options.length > 0) {
-                 parentDirectorySelect.selectedIndex = 0;
-            }
-            openModal('newFolderModal');
-        }
-
-        async function createFolder() {
-            const name = folderNameInput.value.trim();
-            const parent_id = parentDirectorySelect.value ? parseInt(parentDirectorySelect.value) : null;
-            const is_shared = folderIsSharedCheckbox.checked;
-
-            if (!name) {
-                showCustomAlert('Folder name is required.', 'Validation Error');
-                return;
-            }
-            try {
-                const response = await apiCall(`${API_BASE_URL}/api/directories`, {
-                    method: 'POST',
-                    body: JSON.stringify({ name, parent_id, is_shared })
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                }
-                await loadDirectories(); // Refresh directory tree
-                closeModal('newFolderModal');
-                showCustomAlert('Folder created successfully!', 'Success');
-            } catch (error) {
-                console.error('Error creating folder:', error);
-                showCustomAlert(`Error creating folder: ${error.message}`, 'Error');
-            }
-        }
-        async function deleteFolder(folderId, folderName) {
-             if (window.confirm(`Are you sure you want to delete the folder "${folderName}"? This will also delete all prompts and subfolders within it. This action cannot be undone.`)) {
-                try {
-                    const response = await apiCall(`${API_BASE_URL}/api/directories/${folderId}`, { method: 'DELETE' });
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                    }
-                    showCustomAlert(`Folder "${folderName}" deleted successfully.`, 'Success');
-                    // If the deleted folder was selected, select "All Prompts"
-                    if (selectedDirectoryId === folderId) {
-                        selectDirectory(null, 'all', 'All Prompts');
-                    }
-                    await loadDirectories(); // Refresh tree
-                    await loadPrompts(); // Refresh prompts as current view might change
-                } catch (error) {
-                    console.error('Error deleting folder:', error);
-                    showCustomAlert(`Error deleting folder: ${error.message}`, 'Error');
-                }
-            }
-        }
-
-
-        // --- Search ---
-        let searchTimeout;
-        function searchPrompts() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                loadPrompts(); // Reload prompts with search query
-            }, 300); // Debounce search
-        }
-
-        // --- Responsive Sidebar ---
-        const sidebar = document.getElementById('sidebar');
-        const hamburgerMenu = document.getElementById('hamburgerMenu');
-
-        function toggleSidebar() {
-            sidebar.classList.toggle('open');
-        }
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
-                const isClickInsideSidebar = sidebar.contains(event.target);
-                const isClickOnHamburger = hamburgerMenu.contains(event.target);
-                if (!isClickInsideSidebar && !isClickOnHamburger) {
-                    sidebar.classList.remove('open');
-                }
-            }
-        });
-
-
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            checkSession();
-            // Close modals when clicking on the backdrop
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.addEventListener('click', (event) => {
-                    if (event.target === modal) { // Clicked on backdrop
-                        closeModal(modal.id);
-                    }
-                });
-            });
-        });
-
-    </script>
-</body>
-</html>
+    }
+});
+
+
+app.delete('/api/directories/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const user_id = req.user.id;
+  const client = await pool.connect(); // Use a client for transaction
+
+  try {
+    await client.query('BEGIN'); // Start transaction
+
+    // Check if the directory exists and belongs to the user
+    const dirResult = await client.query('SELECT * FROM directories WHERE id = $1 AND user_id = $2', [id, user_id]);
+    if (dirResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Directory not found or you do not have permission to delete it.' });
+    }
+    
+    // The ON DELETE CASCADE on parent_id in directories table and directory_id in prompts table
+    // should handle deleting children and prompts automatically.
+
+    const deleteResult = await client.query('DELETE FROM directories WHERE id = $1 AND user_id = $2', [id, user_id]);
+
+    if (deleteResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        // This case should ideally be caught by the check above, but as a safeguard:
+        return res.status(404).json({ error: 'Directory not found or deletion failed unexpectedly.'});
+    }
+
+    await client.query('COMMIT'); // Commit transaction
+    res.json({ message: 'Directory and all its contents deleted successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK'); // Rollback on error
+    console.error('Delete directory error:', error);
+    // Check for foreign key violation if not using ON DELETE CASCADE or if it fails
+    if (error.code === '23503') { // foreign_key_violation
+        return res.status(400).json({ error: 'Cannot delete directory because it is referenced by other items. Ensure ON DELETE CASCADE is working or handle manually.' });
+    }
+    res.status(500).json({ error: 'Server error deleting directory' });
+  } finally {
+    client.release(); // Release client back to the pool
+  }
+});
+
+
+// --- Prompt Routes ---
+app.post('/api/prompts', authenticateToken, async (req, res) => {
+  try {
+    const { title, content, directory_id, tags, is_restricted } = req.body;
+    const user_id = req.user.id;
+
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+    if (!directory_id) {
+        return res.status(400).json({ error: 'Directory ID is required' });
+    }
+
+    // Verify directory_id belongs to user or is a shared directory they can post to
+    const dirCheck = await pool.query('SELECT user_id, is_shared FROM directories WHERE id = $1', [directory_id]);
+    if (dirCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Directory not found.' });
+    }
+    // Basic check: user owns the directory or it's a shared one.
+    // More granular permissions for shared directories could be added (e.g., write access list)
+    if (dirCheck.rows[0].user_id !== user_id && !dirCheck.rows[0].is_shared) {
+        return res.status(403).json({ error: 'You do not have permission to save prompts to this directory.' });
+    }
+
+
+    const result = await pool.query(
+      `INSERT INTO prompts (title, content, directory_id, user_id, tags, is_restricted, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [title, content, directory_id, user_id, tags || [], is_restricted || false]
+    );
+    const newPrompt = result.rows[0];
+    // Add author email and directory name for immediate use in frontend if needed
+    newPrompt.author_email = req.user.email;
+    newPrompt.directory_name = dirCheck.rows[0].name; // Assuming dirCheck has the name
+
+    res.status(201).json(newPrompt);
+  } catch (error) {
+    console.error('Create prompt error:', error);
+    res.status(500).json({ error: 'Server error creating prompt' });
+  }
+});
+
+app.get('/api/prompts', authenticateToken, async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const user_role = req.user.role;
+    const { directory_id, search } = req.query;
+
+    let query = `
+      SELECT p.*, u.email as author_email, d.name as directory_name
+      FROM prompts p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN directories d ON p.directory_id = d.id
+    `;
+    const params = [];
+    const conditions = [];
+
+    // Base visibility: User sees their own prompts OR prompts in shared directories
+    // OR prompts if they are an admin (admin sees all, unless further restricted)
+    let visibilityCondition = `(p.user_id = $${params.length + 1}`;
+    params.push(user_id);
+    visibilityCondition += ` OR d.is_shared = true)`;
+
+    // If user is admin, they can see everything, but respect is_restricted for non-admins
+    if (user_role !== 'admin') {
+        visibilityCondition += ` AND (d.is_shared = false OR p.is_restricted = false OR p.user_id = $${params.length + 1})`;
+        params.push(user_id); // re-push user_id for this part of OR
+    }
+    conditions.push(`(${visibilityCondition})`);
+
+
+    if (directory_id) {
+      conditions.push(`p.directory_id = $${params.length + 1}`);
+      params.push(parseInt(directory_id));
+    }
+
+    if (search) {
+      conditions.push(`(p.title ILIKE $${params.length + 1} OR p.content ILIKE $${params.length + 1} OR $${params.length + 2} = ANY(p.tags))`);
+      params.push(`%${search}%`);
+      params.push(search); // For tag search
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY p.updated_at DESC';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get prompts error:', error);
+    res.status(500).json({ error: 'Server error fetching prompts' });
+  }
+});
+
+app.put('/api/prompts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // Prompt ID
+    const { title, content, directory_id, tags, is_restricted } = req.body;
+    const user_id = req.user.id;
+    const user_role = req.user.role;
+
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+    if (!directory_id) {
+        return res.status(400).json({ error: 'Directory ID is required' });
+    }
+
+    // Check ownership or admin role
+    const ownershipCheck = await pool.query('SELECT user_id FROM prompts WHERE id = $1', [id]);
+    if (ownershipCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Prompt not found' });
+    }
+    if (ownershipCheck.rows[0].user_id !== user_id && user_role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to edit this prompt' });
+    }
+    
+    // Verify target directory_id belongs to user or is a shared directory they can post to
+    const dirCheck = await pool.query('SELECT user_id, is_shared FROM directories WHERE id = $1', [directory_id]);
+    if (dirCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Target directory not found.' });
+    }
+    if (dirCheck.rows[0].user_id !== user_id && !dirCheck.rows[0].is_shared && user_role !== 'admin') {
+        // If moving to a directory not owned and not shared, and user is not admin
+        return res.status(403).json({ error: 'You do not have permission to move prompts to this target directory.' });
+    }
+
+
+    const result = await pool.query(
+      `UPDATE prompts
+       SET title = $1, content = $2, directory_id = $3, tags = $4, is_restricted = $5, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [title, content, directory_id, tags || [], is_restricted || false, id]
+    );
+
+    if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Prompt not found or update failed.' });
+    }
+    const updatedPrompt = result.rows[0];
+    // Add author email and directory name for immediate use in frontend
+    const authorInfo = await pool.query('SELECT email FROM users WHERE id = $1', [updatedPrompt.user_id]);
+    updatedPrompt.author_email = authorInfo.rows[0]?.email;
+    const dirInfo = await pool.query('SELECT name FROM directories WHERE id = $1', [updatedPrompt.directory_id]);
+    updatedPrompt.directory_name = dirInfo.rows[0]?.name;
+
+
+    res.json(updatedPrompt);
+  } catch (error) {
+    console.error('Update prompt error:', error);
+    res.status(500).json({ error: 'Server error updating prompt' });
+  }
+});
+
+app.delete('/api/prompts/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // Prompt ID
+    const user_id = req.user.id;
+    const user_role = req.user.role;
+
+    // Check ownership or admin role
+    const ownershipCheck = await pool.query('SELECT user_id FROM prompts WHERE id = $1', [id]);
+    if (ownershipCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Prompt not found' });
+    }
+    if (ownershipCheck.rows[0].user_id !== user_id && user_role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to delete this prompt' });
+    }
+
+    await pool.query('DELETE FROM prompts WHERE id = $1', [id]);
+    res.json({ message: 'Prompt deleted successfully' });
+  } catch (error) {
+    console.error('Delete prompt error:', error);
+    res.status(500).json({ error: 'Server error deleting prompt' });
+  }
+});
+
+// --- Chrome Extension Route (Example) ---
+app.post('/api/chrome-extension/save', authenticateToken, async (req, res) => {
+  try {
+    const { text, url, title: providedTitle } = req.body;
+    const user_id = req.user.id;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text content is required' });
+    }
+
+    const promptTitle = providedTitle || `Saved from ${url ? new URL(url).hostname : 'Chrome'}`;
+
+    // Find or create "Chrome Saves" directory for the user
+    let directoryResult = await pool.query(
+      'SELECT id FROM directories WHERE name = $1 AND user_id = $2',
+      ['Chrome Saves', user_id]
+    );
+    let directoryId;
+    if (directoryResult.rows.length === 0) {
+      const newDir = await pool.query(
+        'INSERT INTO directories (name, user_id) VALUES ($1, $2) RETURNING id',
+        ['Chrome Saves', user_id]
+      );
+      directoryId = newDir.rows[0].id;
+    } else {
+      directoryId = directoryResult.rows[0].id;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO prompts (title, content, directory_id, user_id, tags, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [promptTitle, text, directoryId, user_id, ['chrome-extension', 'saved']]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Chrome extension save error:', error);
+    res.status(500).json({ error: 'Server error saving from Chrome extension' });
+  }
+});
+
+
+// Serve the frontend (index.html) for the root path
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
+
+// Global error handler (optional, for unhandled errors)
+app.use((err, req, res, next) => {
+    console.error("Unhandled application error:", err.stack);
+    res.status(500).send('Something broke!');
+});
+
+
+// Start server and initialize database
+app.listen(PORT, async () => {
+  await initializeDatabase();
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Frontend available at http://localhost:${PORT}`);
+});
