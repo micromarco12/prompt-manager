@@ -570,9 +570,7 @@
                     <span class="directory-icon">👤</span>
                     <span>My Prompts</span>
                 </div>
-                <div class="directory-item" onclick="selectDirectory(this, 'shared')" 
-                     ondragover="handleDragOver(event)" 
-                     ondrop="handleDrop(event, 'shared')">
+                <div class="directory-item" onclick="selectDirectory(this, 'shared')">
                     <span class="directory-icon">👥</span>
                     <span>Shared Prompts</span>
                 </div>
@@ -796,178 +794,9 @@
                 
                 // Update directory dropdowns
                 updateDirectoryDropdowns();
-                
-                // Update directory tree in sidebar
-                updateDirectoryTree();
             } catch (error) {
                 console.error('Error loading directories:', error);
             }
-        }
-
-        // Update directory tree in sidebar
-        function updateDirectoryTree() {
-            const directoryTree = document.getElementById('directoryTree');
-            
-            // Keep the default directories
-            let html = `
-                <div class="directory-item ${currentDirectory === 'all' ? 'active' : ''}" onclick="selectDirectory(this, 'all')">
-                    <span class="directory-icon">📚</span>
-                    <span>All Prompts</span>
-                </div>
-                <div class="directory-item ${currentDirectory === 'my-prompts' ? 'active' : ''}" onclick="selectDirectory(this, 'my-prompts')">
-                    <span class="directory-icon">👤</span>
-                    <span>My Prompts</span>
-                </div>
-                <div class="directory-item ${currentDirectory === 'shared' ? 'active' : ''}" onclick="selectDirectory(this, 'shared')" 
-                     ondragover="handleDragOver(event)" 
-                     ondragleave="handleDragOut(event)"
-                     ondrop="handleDrop(event, 'shared')">
-                    <span class="directory-icon">👥</span>
-                    <span>Shared Prompts</span>
-                </div>
-            `;
-            
-            // Add custom directories (avoid duplicates and system directories)
-            const addedDirs = new Set();
-            directories.forEach(dir => {
-                if (dir.name !== 'My Prompts' && dir.name !== 'Shared Prompts' && !addedDirs.has(dir.id)) {
-                    addedDirs.add(dir.id);
-                    html += `
-                        <div class="directory-item ${currentDirectory === 'dir-' + dir.id ? 'active' : ''}" 
-                             onclick="selectDirectory(this, 'dir-${dir.id}')"
-                             ondragover="handleDragOver(event)" 
-                             ondragleave="handleDragOut(event)"
-                             ondrop="handleDrop(event, 'dir-${dir.id}')"
-                             oncontextmenu="showFolderMenu(event, ${dir.id}, '${dir.name.replace(/'/g, "\\'")}')">
-                            <span class="directory-icon">📁</span>
-                            <span>${dir.name}</span>
-                        </div>
-                    `;
-                }
-            });
-            
-            directoryTree.innerHTML = html;
-        }
-
-        // Show folder context menu
-        function showFolderMenu(e, folderId, folderName) {
-            e.preventDefault();
-            
-            // Remove any existing context menu
-            const existingMenu = document.querySelector('.context-menu');
-            if (existingMenu) {
-                existingMenu.remove();
-            }
-            
-            // Create context menu
-            const menu = document.createElement('div');
-            menu.className = 'context-menu';
-            menu.style.cssText = `
-                position: fixed;
-                top: ${e.clientY}px;
-                left: ${e.clientX}px;
-                background: #1a1a1a;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 8px;
-                padding: 8px 0;
-                z-index: 1000;
-                min-width: 150px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            `;
-            
-            menu.innerHTML = `
-                <div class="context-menu-item" onclick="renameFolderPrompt(${folderId}, '${folderName.replace(/'/g, "\\'")}')">
-                    <span>✏️ Rename</span>
-                </div>
-                <div class="context-menu-item" onclick="deleteFolder(${folderId})">
-                    <span>🗑️ Delete</span>
-                </div>
-            `;
-            
-            document.body.appendChild(menu);
-            
-            // Style menu items
-            const style = document.createElement('style');
-            style.textContent = `
-                .context-menu-item {
-                    padding: 8px 16px;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                    color: #e0e0e0;
-                }
-                .context-menu-item:hover {
-                    background: rgba(102, 126, 234, 0.2);
-                }
-            `;
-            document.head.appendChild(style);
-            
-            // Close menu when clicking outside
-            document.addEventListener('click', function closeMenu(e) {
-                if (!menu.contains(e.target)) {
-                    menu.remove();
-                    document.removeEventListener('click', closeMenu);
-                }
-            });
-        }
-
-        // Rename folder prompt
-        function renameFolderPrompt(folderId, currentName) {
-            const newName = prompt('Enter new folder name:', currentName);
-            if (newName && newName !== currentName) {
-                renameFolder(folderId, newName);
-            }
-            // Remove context menu
-            const menu = document.querySelector('.context-menu');
-            if (menu) menu.remove();
-        }
-
-        // Rename folder
-        async function renameFolder(folderId, newName) {
-            try {
-                const response = await apiCall(`/api/directories/${folderId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify({ name: newName })
-                });
-                
-                if (response.ok) {
-                    await loadDirectories();
-                    showCopySuccess('Folder renamed successfully');
-                } else {
-                    const error = await response.json();
-                    alert('Error renaming folder: ' + (error.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error renaming folder:', error);
-                alert('Error renaming folder. Please try again.');
-            }
-        }
-
-        // Delete folder
-        async function deleteFolder(folderId) {
-            if (confirm('Are you sure you want to delete this folder? Prompts in this folder will be moved to My Prompts.')) {
-                try {
-                    const response = await apiCall(`/api/directories/${folderId}`, {
-                        method: 'DELETE'
-                    });
-                    
-                    if (response.ok) {
-                        await loadDirectories();
-                        if (currentDirectory === 'dir-' + folderId) {
-                            selectDirectory(document.querySelector('.directory-item'), 'all');
-                        }
-                        showCopySuccess('Folder deleted successfully');
-                    } else {
-                        const error = await response.json();
-                        alert('Error deleting folder: ' + (error.error || 'Unknown error'));
-                    }
-                } catch (error) {
-                    console.error('Error deleting folder:', error);
-                    alert('Error deleting folder. Please try again.');
-                }
-            }
-            // Remove context menu
-            const menu = document.querySelector('.context-menu');
-            if (menu) menu.remove();
         }
 
         // Update directory dropdowns
@@ -992,18 +821,14 @@
             currentDirectory = directory;
             
             let title = 'All Prompts';
-            if (directory === 'my-prompts') {
-                title = 'My Prompts';
-            } else if (directory === 'shared') {
-                title = 'Shared Prompts';
-            } else if (directory.startsWith('dir-')) {
-                const dirId = parseInt(directory.replace('dir-', ''));
-                const dir = directories.find(d => d.id === dirId);
-                if (dir) {
-                    title = dir.name;
-                }
+            switch(directory) {
+                case 'my-prompts':
+                    title = 'My Prompts';
+                    break;
+                case 'shared':
+                    title = 'Shared Prompts';
+                    break;
             }
-            
             document.getElementById('currentDirectory').textContent = title;
             loadPrompts();
         }
@@ -1020,18 +845,7 @@
                 if (currentDirectory === 'my-prompts') {
                     params.append('user_only', 'true');
                 } else if (currentDirectory === 'shared') {
-                    // Find shared directory ID
-                    const sharedDir = directories.find(d => d.name === 'Shared Prompts');
-                    if (sharedDir) {
-                        params.append('directory', sharedDir.id);
-                    }
-                } else if (currentDirectory.startsWith('dir-')) {
-                    // Custom directory
-                    const dirId = currentDirectory.replace('dir-', '');
-                    params.append('directory', dirId);
-                } else if (currentDirectory !== 'all') {
-                    // Named directory
-                    params.append('directory', currentDirectory);
+                    params.append('directory', 'Shared Prompts');
                 }
                 
                 if (params.toString()) {
@@ -1062,21 +876,6 @@
             const card = document.createElement('div');
             card.className = 'prompt-card';
             card.onclick = () => viewPrompt(prompt);
-            card.draggable = true;
-            card.dataset.promptId = prompt.id;
-            
-            // Add drag event listeners
-            card.ondragstart = (e) => {
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setData('promptId', prompt.id.toString());
-                e.dataTransfer.setData('text/plain', prompt.id.toString()); // Firefox compatibility
-                card.style.opacity = '0.5';
-                console.log('Dragging prompt:', prompt.id, prompt.title);
-            };
-            
-            card.ondragend = (e) => {
-                card.style.opacity = '1';
-            };
             
             const truncatedContent = prompt.content.length > 100 
                 ? prompt.content.substring(0, 100) + '...' 
@@ -1167,8 +966,7 @@
         function copyPrompt() {
             const content = document.getElementById('viewPromptContent').value;
             navigator.clipboard.writeText(content).then(() => {
-                // Show temporary success message instead of alert
-                showCopySuccess();
+                alert('Prompt copied to clipboard!');
             }).catch(err => {
                 console.error('Error copying to clipboard:', err);
                 // Fallback for older browsers
@@ -1178,39 +976,15 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showCopySuccess();
+                alert('Prompt copied to clipboard!');
             });
-        }
-
-        // Show copy success message
-        function showCopySuccess(message = 'Copied to clipboard!') {
-            const messageEl = document.createElement('div');
-            messageEl.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #4CAF50;
-                color: white;
-                padding: 15px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                z-index: 10000;
-                animation: slideIn 0.3s ease;
-            `;
-            messageEl.textContent = message;
-            document.body.appendChild(messageEl);
-            
-            setTimeout(() => {
-                messageEl.style.animation = 'fadeOut 0.3s ease';
-                setTimeout(() => document.body.removeChild(messageEl), 300);
-            }, 2000);
         }
 
         function copyPromptDirect(promptId) {
             const prompt = prompts.find(p => p.id === promptId);
             if (prompt) {
                 navigator.clipboard.writeText(prompt.content).then(() => {
-                    showCopySuccess();
+                    alert('Prompt copied to clipboard!');
                 }).catch(err => {
                     // Fallback for older browsers
                     const textarea = document.createElement('textarea');
@@ -1219,7 +993,7 @@
                     textarea.select();
                     document.execCommand('copy');
                     document.body.removeChild(textarea);
-                    showCopySuccess();
+                    alert('Prompt copied to clipboard!');
                 });
             }
         }
@@ -1380,91 +1154,6 @@
                 }
             }
         });
-
-        // Drag and drop handlers
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
-            e.currentTarget.style.background = 'rgba(102, 126, 234, 0.2)';
-        }
-
-        function handleDragOut(e) {
-            e.currentTarget.style.background = '';
-        }
-
-        function handleDrop(e, targetDirectory) {
-            e.preventDefault();
-            e.currentTarget.style.background = '';
-            
-            const promptId = parseInt(e.dataTransfer.getData('promptId'));
-            const prompt = prompts.find(p => p.id === promptId);
-            
-            if (prompt) {
-                if (targetDirectory === 'shared') {
-                    // Find the shared directory ID
-                    const sharedDir = directories.find(d => d.name === 'Shared Prompts');
-                    if (sharedDir) {
-                        copyPromptToDirectory(prompt, sharedDir.id);
-                    }
-                } else if (targetDirectory.startsWith('dir-')) {
-                    // Custom directory
-                    const dirId = parseInt(targetDirectory.replace('dir-', ''));
-                    copyPromptToDirectory(prompt, dirId);
-                }
-            }
-        }
-
-        // Copy prompt to directory
-        async function copyPromptToDirectory(prompt, directoryId) {
-            try {
-                const response = await apiCall('/api/prompts', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        title: prompt.title + ' (Copy)',
-                        content: prompt.content,
-                        directory_id: directoryId,
-                        tags: prompt.tags || []
-                    })
-                });
-                
-                if (response.ok) {
-                    showCopySuccess('Prompt copied successfully');
-                    // Refresh prompts if we're viewing the target directory
-                    const currentDirId = currentDirectory.startsWith('dir-') ? 
-                        parseInt(currentDirectory.replace('dir-', '')) : null;
-                    
-                    if (currentDirId === directoryId || 
-                        (currentDirectory === 'shared' && directories.find(d => d.id === directoryId && d.name === 'Shared Prompts')) ||
-                        currentDirectory === 'all') {
-                        await loadPrompts();
-                    }
-                } else {
-                    const error = await response.json();
-                    console.error('Error copying prompt:', error);
-                    alert('Error copying prompt: ' + (error.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error copying prompt:', error);
-                alert('Error copying prompt. Please try again.');
-            }
-        }
-
-        // Add animation keyframes for success message
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes fadeOut {
-                from { opacity: 1; }
-                to { opacity: 0; }
-            }
-            .directory-item[ondragover]:hover {
-                background: rgba(102, 126, 234, 0.1);
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
