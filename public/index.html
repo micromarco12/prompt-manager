@@ -923,6 +923,14 @@
             directoryTreeContainer.innerHTML = `<div class="directory-item active" data-id="all"><div class="directory-item-name-container"><span class="directory-icon">All</span><span>All Prompts</span></div></div>`; // Reset to only "All Prompts"
             promptGrid.innerHTML = '';
             closeAllModals();
+             // Re-initialize listener for "All Prompts" after logout and clearing tree
+            const allPromptsStaticItem = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
+            if (allPromptsStaticItem) {
+                const nameContainer = allPromptsStaticItem.querySelector('.directory-item-name-container');
+                if (nameContainer) {
+                    nameContainer.addEventListener('click', () => selectDirectory(allPromptsStaticItem, 'all', 'All Prompts'));
+                }
+            }
         }
 
         async function checkSession() {
@@ -931,7 +939,7 @@
             if (authToken && userString) {
                 currentUser = JSON.parse(userString);
                 try {
-                    await apiCall('/api/directories');
+                    await apiCall('/api/directories'); // Verifies token
                     userEmailDisplay.textContent = currentUser.email;
                     loginScreen.style.display = 'none'; appContainer.style.display = 'flex';
                     initializeAppData();
@@ -943,15 +951,18 @@
 
         // Data Loading and Rendering
         async function initializeAppData() {
+            console.log("Initializing app data. Current user:", currentUser);
             await loadDirectories();
             await loadPrompts();
         }
 
         async function loadDirectories() {
+            console.log("Loading directories...");
             try {
                 const response = await apiCall('/api/directories');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 directories = await response.json();
+                console.log("Directories loaded:", directories);
                 renderDirectoryTree();
                 updateDirectoryDropdowns();
             } catch (error) {
@@ -961,16 +972,23 @@
         }
 
         function renderDirectoryTree() {
+            console.log("Rendering directory tree. Selected ID:", selectedDirectoryId);
             const allPromptsStaticItem = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
-            // Clear only dynamic directories, keep the static "All Prompts"
+            
             directoryTreeContainer.querySelectorAll('.directory-item:not([data-id="all"])').forEach(el => el.remove());
-            document.querySelectorAll('.sub-directory').forEach(el => el.remove());
+            directoryTreeContainer.querySelectorAll('.sub-directory').forEach(el => el.remove());
 
-            if (allPromptsStaticItem) { // Ensure it exists
+            if (allPromptsStaticItem) {
                  if (selectedDirectoryId === 'all') allPromptsStaticItem.classList.add('active');
                  else allPromptsStaticItem.classList.remove('active');
+            } else {
+                console.error("'All Prompts' static item not found in directoryTreeContainer!");
             }
 
+            if (!currentUser) {
+                console.warn("RenderDirectoryTree called but currentUser is null. Skipping dynamic directory rendering.");
+                return;
+            }
 
             const userOwnedOrExplicitlySharedDirs = directories.filter(dir => dir.user_id === currentUser.id || dir.is_shared);
             const directoryMap = new Map(userOwnedOrExplicitlySharedDirs.map(dir => [dir.id, {...dir, children: []}]));
@@ -980,17 +998,18 @@
                 const mappedDir = directoryMap.get(dir.id);
                 if (dir.parent_id && directoryMap.has(dir.parent_id)) {
                     directoryMap.get(dir.parent_id).children.push(mappedDir);
-                } else if (!dir.parent_id) { // Only add root directories here
+                } else if (!dir.parent_id) {
                     rootDirectories.push(mappedDir);
                 }
             });
             
             rootDirectories.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => renderDirectoryRecursive(dir, directoryTreeContainer, 0));
+            console.log("Directory tree rendered.");
         }
 
         function renderDirectoryRecursive(directory, parentElement, depth) {
             const iconText = directory.is_shared ? '[S]' : '[F]';
-            const canDelete = currentUser && directory.user_id === currentUser.id; // Check currentUser
+            const canDelete = currentUser && directory.user_id === currentUser.id;
             const directoryElement = createDirectoryElement(directory, iconText, depth > 0, canDelete);
 
             if (String(directory.id) === String(selectedDirectoryId)) {
@@ -1001,7 +1020,7 @@
             if (directory.children && directory.children.length > 0) {
                 const subDirectoryContainer = document.createElement('div');
                 subDirectoryContainer.className = 'sub-directory';
-                subDirectoryContainer.style.marginLeft = `${depth * 15 + 20}px`; // Adjusted indent
+                subDirectoryContainer.style.marginLeft = `${depth * 15 + 20}px`;
 
                 directory.children.sort((a, b) => a.name.localeCompare(b.name));
                 directory.children.forEach(childDir => renderDirectoryRecursive(childDir, subDirectoryContainer, depth + 1));
@@ -1017,11 +1036,9 @@
 
             const nameContainer = document.createElement('div');
             nameContainer.className = 'directory-item-name-container';
-            // For "All Prompts", listener is added in DOMContentLoaded. For others, add here.
-            if (dir.id !== 'all') {
+            if (dir.id !== 'all') { // Listener for "All" is attached in DOMContentLoaded
                 nameContainer.addEventListener('click', () => selectDirectory(item, dir.id, dir.name));
             }
-
 
             const icon = document.createElement('span');
             icon.className = 'directory-icon';
@@ -1048,9 +1065,14 @@
         }
 
         function updateDirectoryDropdowns() {
+            console.log("Updating directory dropdowns. Current user:", currentUser);
             promptDirectorySelect.innerHTML = '';
             parentDirectorySelect.innerHTML = '<option value="">Root (No Parent)</option>';
-            if (!currentUser) return; // Guard clause
+            if (!currentUser) {
+                console.warn("UpdateDirectoryDropdowns called but currentUser is null.");
+                promptDirectorySelect.innerHTML = '<option value="">Login to see directories</option>';
+                return;
+            }
 
             const userOwnedDirs = directories.filter(dir => dir.user_id === currentUser.id);
             const sharedByAnyone = directories.filter(dir => dir.is_shared && dir.user_id !== currentUser.id);
@@ -1073,7 +1095,7 @@
                  sharedByAnyone.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => {
                     const option = document.createElement('option');
                     option.value = dir.id;
-                    const owner = directories.find(d => d.id === dir.id);
+                    const owner = directories.find(d => d.id === dir.id); // directories should have owner_email from backend
                     option.textContent = dir.name + (owner?.owner_email ? ` (by ${owner.owner_email})` : ' (Shared)');
                     sharedOptGroup.appendChild(option);
                  });
@@ -1089,17 +1111,24 @@
                 option.textContent = dir.name;
                 parentDirectorySelect.appendChild(option);
             });
+            console.log("Directory dropdowns updated.");
         }
 
         function selectDirectory(element, directoryId, directoryName) {
+            console.log(`Selecting directory: ID=${directoryId}, Name=${directoryName}`);
             document.querySelectorAll('.directory-item').forEach(item => item.classList.remove('active'));
             if (element) element.classList.add('active');
+            else { // If element is null (e.g. called programmatically), find and activate it
+                const targetItem = directoryTreeContainer.querySelector(`.directory-item[data-id="${directoryId}"]`);
+                if (targetItem) targetItem.classList.add('active');
+            }
             selectedDirectoryId = directoryId;
             currentDirectoryNameDisplay.textContent = directoryName || (directoryId === 'all' ? 'All Prompts' : 'Unknown Folder');
             loadPrompts();
         }
 
         async function loadPrompts() {
+            console.log("Loading prompts for directory ID:", selectedDirectoryId);
             promptGrid.innerHTML = '<div class="loading-message">Loading prompts...</div>';
             try {
                 let url = `${API_BASE_URL}/api/prompts`;
@@ -1114,6 +1143,7 @@
                 const response = await apiCall(url);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 prompts = await response.json();
+                console.log("Prompts loaded:", prompts);
                 renderPrompts(prompts);
             } catch (error) {
                 console.error('Error loading prompts:', error);
@@ -1122,32 +1152,56 @@
         }
 
         function renderPrompts(promptsToRender) {
+            console.log("Rendering prompts. Count:", promptsToRender.length);
             promptGrid.innerHTML = '';
             if (promptsToRender.length === 0) {
                 promptGrid.innerHTML = '<div class="empty-message">No prompts found.</div>';
             } else {
                 promptsToRender.forEach(prompt => {
                     const card = createPromptCard(prompt);
-                    promptGrid.appendChild(card);
+                    if (card) { // Only append if card creation was successful
+                        promptGrid.appendChild(card);
+                    }
                 });
             }
+            console.log("Prompts rendered.");
         }
 
         function createPromptCard(prompt) {
+            console.log("Attempting to create card for prompt:", prompt);
+            if (!prompt || typeof prompt.id === 'undefined') {
+                console.error("INVALID PROMPT DATA received in createPromptCard:", prompt);
+                const errorCard = document.createElement('div');
+                errorCard.textContent = 'Error: Invalid prompt data. Cannot render card.';
+                errorCard.style.color = 'red';
+                errorCard.style.border = '1px solid red';
+                errorCard.style.padding = '10px';
+                return errorCard; // Return the error card to be appended
+            }
+
             const card = document.createElement('div');
             card.className = 'prompt-card';
+            card.dataset.promptId = prompt.id;
 
             const contentArea = document.createElement('div');
             contentArea.className = 'prompt-card-content-area';
-            contentArea.addEventListener('click', () => viewPromptDetails(prompt));
+            try {
+                contentArea.addEventListener('click', function() {
+                    console.log("Card contentArea clicked for prompt ID:", prompt.id, "Prompt object:", JSON.parse(JSON.stringify(prompt)));
+                    viewPromptDetails(prompt);
+                });
+            } catch (e) {
+                console.error("Error attaching click listener to contentArea for prompt ID " + prompt.id, e);
+            }
 
             const titleH3 = document.createElement('h3');
             titleH3.textContent = prompt.title || 'Untitled Prompt';
             contentArea.appendChild(titleH3);
 
             const contentP = document.createElement('p');
-            contentP.title = prompt.content;
-            contentP.textContent = prompt.content.length > 100 ? prompt.content.substring(0, 100) + '...' : prompt.content;
+            contentP.title = prompt.content || '';
+            const displayContent = prompt.content || '';
+            contentP.textContent = displayContent.length > 100 ? displayContent.substring(0, 100) + '...' : displayContent;
             contentArea.appendChild(contentP);
             card.appendChild(contentArea);
 
@@ -1164,20 +1218,38 @@
             const copyButton = document.createElement('button');
             copyButton.className = 'prompt-action';
             copyButton.textContent = 'Copy';
-            copyButton.addEventListener('click', (e) => { e.stopPropagation(); copyPromptContentById(prompt.id); });
+            try {
+                copyButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    console.log("Copy button clicked for prompt ID:", prompt.id);
+                    copyPromptContentById(prompt.id);
+                });
+            } catch (e) {
+                console.error("Error attaching click listener to copyButton for prompt ID " + prompt.id, e);
+            }
             actionsDiv.appendChild(copyButton);
 
-            // FIX: Added check for currentUser before accessing its properties
-            if (currentUser && (prompt.user_id === currentUser.id || currentUser.role === 'admin')) {
+            if (currentUser && typeof prompt.user_id !== 'undefined' && (prompt.user_id === currentUser.id || currentUser.role === 'admin')) {
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'prompt-action delete';
                 deleteButton.textContent = 'Delete';
-                deleteButton.addEventListener('click', (e) => { e.stopPropagation(); deletePrompt(prompt.id, prompt.title); });
+                try {
+                    deleteButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        console.log("Delete button clicked for prompt ID:", prompt.id, "Title:", prompt.title);
+                        deletePrompt(prompt.id, prompt.title);
+                    });
+                } catch (e) {
+                    console.error("Error attaching click listener to deleteButton for prompt ID " + prompt.id, e);
+                }
                 actionsDiv.appendChild(deleteButton);
+            } else {
+                 console.log("Delete button not added for prompt ID:", prompt.id, "currentUser:", currentUser, "prompt.user_id:", prompt.user_id);
             }
 
             metaDiv.appendChild(actionsDiv);
             card.appendChild(metaDiv);
+            console.log("Card created successfully for prompt ID:", prompt.id);
             return card;
         }
 
@@ -1227,10 +1299,16 @@
         }
 
         function viewPromptDetails(prompt) {
+            console.log("Viewing details for prompt:", prompt);
+            if (!prompt || typeof prompt.id === 'undefined') {
+                console.error("viewPromptDetails called with invalid prompt:", prompt);
+                showCustomAlert("Cannot view details: Invalid prompt data.", "Error");
+                return;
+            }
             currentEditingPrompt = prompt;
-            viewPromptTitleDisplay.textContent = prompt.title;
-            viewPromptContentDisplay.value = prompt.content;
-            let metaText = `By: ${prompt.author_email||'Unknown'} on ${new Date(prompt.created_at).toLocaleDateString()}`;
+            viewPromptTitleDisplay.textContent = prompt.title || "Untitled";
+            viewPromptContentDisplay.value = prompt.content || "";
+            let metaText = `By: ${prompt.author_email||'Unknown'} on ${new Date(prompt.created_at || Date.now()).toLocaleDateString()}`;
             if (prompt.directory_name) metaText += ` | In: ${prompt.directory_name}`;
             viewPromptMetaDisplay.textContent = metaText;
             viewPromptTagsDisplay.textContent = `Tags: ${prompt.tags && prompt.tags.length > 0 ? prompt.tags.join(', ') : 'None'}`;
@@ -1239,13 +1317,17 @@
         }
 
         function prepareEditPrompt() {
-            if (!currentEditingPrompt) return;
+            if (!currentEditingPrompt || typeof currentEditingPrompt.id === 'undefined') {
+                 console.error("prepareEditPrompt called with invalid currentEditingPrompt:", currentEditingPrompt);
+                 showCustomAlert("Cannot edit: Invalid prompt data.", "Error");
+                 return;
+            }
             closeModal('viewPromptModal');
             promptModalTitle.textContent = 'Edit Prompt'; savePromptBtn.textContent = 'Update Prompt';
             promptIdInput.value = currentEditingPrompt.id;
-            promptTitleInput.value = currentEditingPrompt.title;
-            promptContentInput.value = currentEditingPrompt.content;
-            promptDirectorySelect.value = currentEditingPrompt.directory_id;
+            promptTitleInput.value = currentEditingPrompt.title || "";
+            promptContentInput.value = currentEditingPrompt.content || "";
+            promptDirectorySelect.value = currentEditingPrompt.directory_id; // Ensure this value exists in select
             promptTagsInput.value = currentEditingPrompt.tags ? currentEditingPrompt.tags.join(', ') : '';
             promptIsRestrictedCheckbox.checked = currentEditingPrompt.is_restricted || false;
             openModal('promptModal');
@@ -1271,9 +1353,19 @@
         }
 
         function copyPromptContent() { copyToClipboard(viewPromptContentDisplay.value); }
-        function copyPromptContentById(promptId) { const p = prompts.find(pr => pr.id === promptId); if (p) copyToClipboard(p.content); }
+        function copyPromptContentById(promptId) {
+            console.log("Attempting to copy content for prompt ID:", promptId);
+            const p = prompts.find(pr => pr.id === promptId);
+            if (p && typeof p.content !== 'undefined') {
+                copyToClipboard(p.content);
+            } else {
+                console.error("Prompt not found or content undefined for ID:", promptId, "Prompt found:", p);
+                showCustomAlert("Cannot copy: Prompt content not found.", "Error");
+            }
+        }
 
         async function deletePrompt(promptId, promptTitle) {
+            console.log("Attempting to delete prompt ID:", promptId, "Title:", promptTitle);
             if (window.confirm(`Delete prompt "${promptTitle || 'this prompt'}"? This cannot be undone.`)) {
                 try {
                     const response = await apiCall(`${API_BASE_URL}/api/prompts/${promptId}`, { method: 'DELETE' });
@@ -1313,7 +1405,14 @@
                     showCustomAlert(`Folder "${folderName}" deleted.`, 'Success');
                     if (String(selectedDirectoryId) === String(folderId)) {
                         const allPromptsEl = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
-                        selectDirectory(allPromptsEl, 'all', 'All Prompts');
+                        // Ensure selectDirectory is called correctly for the "All Prompts" item
+                        if (allPromptsEl) {
+                            const nameContainer = allPromptsEl.querySelector('.directory-item-name-container');
+                            if (nameContainer) selectDirectory(allPromptsEl, 'all', 'All Prompts');
+                            else console.error("Name container for 'All Prompts' not found after folder deletion.");
+                        } else {
+                             console.error("'All Prompts' item not found after folder deletion.");
+                        }
                     }
                     await loadDirectories(); await loadPrompts();
                 } catch (error) { console.error('Error deleting folder:', error); showCustomAlert(`Error: ${error.message}`, 'Error'); }
@@ -1341,16 +1440,26 @@
 
         // Initialization
         document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM fully loaded and parsed.");
             checkSession();
             document.querySelectorAll('.modal').forEach(modal => {
                 modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(modal.id); });
             });
+            
             const allPromptsStaticItem = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
             if (allPromptsStaticItem) {
                  const nameContainer = allPromptsStaticItem.querySelector('.directory-item-name-container');
-                 if (nameContainer) { // Ensure nameContainer exists before adding listener
-                    nameContainer.addEventListener('click', () => selectDirectory(allPromptsStaticItem, 'all', 'All Prompts'));
+                 if (nameContainer) {
+                    console.log("Attaching click listener to static 'All Prompts' item's name container.");
+                    nameContainer.addEventListener('click', () => {
+                        console.log("'All Prompts' static item clicked.");
+                        selectDirectory(allPromptsStaticItem, 'all', 'All Prompts');
+                    });
+                 } else {
+                    console.error("Could not find name container for static 'All Prompts' item to attach listener.");
                  }
+            } else {
+                console.error("Static 'All Prompts' item not found in DOM at load.");
             }
         });
     </script>
