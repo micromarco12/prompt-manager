@@ -184,6 +184,11 @@
             background: rgba(102, 126, 234, 0.3);
             transform: translateY(-2px);
         }
+        /* ICON CHANGE: Simpler text for icon */
+        .new-folder-btn .icon-placeholder {
+            font-weight: bold;
+        }
+
 
         .directory-tree {
             flex: 1;
@@ -224,7 +229,9 @@
         }
 
         .directory-icon {
-            font-size: 18px;
+            font-size: 16px; /* Adjusted size for text icons */
+            min-width: 20px; /* Ensure space for icon text */
+            text-align: center;
         }
         .delete-folder-btn {
             background: none;
@@ -244,8 +251,8 @@
 
 
         .sub-directory {
-            margin-left: 25px;
-            margin-top: 5px;
+            margin-left: 25px; /* This was for original sub-directory indent */
+            /* If using nested rendering, this might need adjustment or be handled by padding */
         }
 
         /* Main Content */
@@ -272,6 +279,10 @@
         .actions {
             display: flex;
             gap: 15px;
+        }
+        /* ICON CHANGE: Simpler text for icon */
+        .action-btn .icon-placeholder {
+            font-weight: bold;
         }
 
         .action-btn {
@@ -306,6 +317,11 @@
             align-items: center;
             gap: 10px;
         }
+        /* ICON CHANGE: Simpler text for icon */
+        .search-bar .icon-placeholder {
+            font-size: 18px;
+            color: #888;
+        }
 
         .search-bar input {
             flex: 1;
@@ -335,13 +351,21 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             padding: 20px;
-            cursor: pointer;
+            /* cursor: pointer; /* Cursor will be set on the card-content-area if needed */
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
             display: flex; /* For better content structuring */
             flex-direction: column; /* Stack content vertically */
         }
+        /* Added a wrapper for content that should be clickable to view details */
+        .prompt-card-content-area {
+            flex-grow: 1;
+            cursor: pointer; /* Make only this part clickable for view */
+            display: flex;
+            flex-direction: column;
+        }
+
 
         .prompt-card::before {
             content: '';
@@ -662,19 +686,18 @@
 
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h1>統 Prompt Library</h1>
+                 <h1>Prompt Library</h1>
             </div>
             <div class="user-info">
                 <span id="userEmail">user@company.com</span>
                 <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
             <button class="new-folder-btn" onclick="showNewFolderModal()">
-                <span>刀</span> New Folder
+                 <span class="icon-placeholder">[+]</span> New Folder
             </button>
             <div class="directory-tree" id="directoryTree">
-                <div class="directory-item active" data-id="all" onclick="selectDirectory(this, 'all', 'All Prompts')">
-                     <div class="directory-item-name-container">
-                        <span class="directory-icon">答</span>
+                <div class="directory-item active" data-id="all"> <div class="directory-item-name-container">
+                         <span class="directory-icon">All</span>
                         <span>All Prompts</span>
                     </div>
                 </div>
@@ -686,13 +709,13 @@
                 <h2 id="currentDirectoryName">All Prompts</h2>
                 <div class="actions">
                     <button class="action-btn" onclick="showNewPromptModal()">
-                        <span>筐/span> New Prompt
+                        <span class="icon-placeholder">[+]</span> New Prompt
                     </button>
                 </div>
             </div>
             <div class="search-bar-container">
                 <div class="search-bar">
-                    <span>剥</span>
+                    <span class="icon-placeholder">🔎</span>
                     <input type="text" placeholder="Search prompts..." id="searchInput" onkeyup="searchPrompts()">
                 </div>
             </div>
@@ -793,7 +816,7 @@
         let currentUser = null;
         let prompts = [];
         let directories = [];
-        let selectedDirectoryId = 'all'; // Can be 'all', 'my-prompts', 'shared', or a specific directory ID
+        let selectedDirectoryId = 'all'; // Can be 'all', or a specific directory ID
         let authToken = null;
         let currentEditingPrompt = null; // To store prompt data when editing
 
@@ -981,62 +1004,71 @@
             }
         }
         function renderDirectoryTree() {
-            directoryTreeContainer.innerHTML = ''; // Clear existing tree
+            // Preserve the static "All Prompts" item if it's already there, or create it
+            let allPromptsItem = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
+            if (!allPromptsItem) {
+                allPromptsItem = createDirectoryElement({ id: 'all', name: 'All Prompts' }, 'All', false, false); // No delete for "All"
+                directoryTreeContainer.insertBefore(allPromptsItem, directoryTreeContainer.firstChild);
+            }
+            // Clear only dynamic directories
+            directoryTreeContainer.querySelectorAll('.directory-item:not([data-id="all"])').forEach(el => el.remove());
+            document.querySelectorAll('.sub-directory').forEach(el => el.remove());
 
-            // Static "All Prompts" item
-            const allPromptsItem = createDirectoryElement({ id: 'all', name: 'All Prompts' }, '答');
+
             if (selectedDirectoryId === 'all') allPromptsItem.classList.add('active');
-            directoryTreeContainer.appendChild(allPromptsItem);
+            else allPromptsItem.classList.remove('active');
 
-            // Filter for user's own directories (not shared by others, unless it's their own shared)
-            // and directories explicitly marked as shared
+
             const userOwnedOrExplicitlySharedDirs = directories.filter(dir => dir.user_id === currentUser.id || dir.is_shared);
-
-            // Create a map for quick parent lookup
             const directoryMap = new Map(userOwnedOrExplicitlySharedDirs.map(dir => [dir.id, {...dir, children: []}]));
-
-            // Build the tree structure
             const rootDirectories = [];
+
             userOwnedOrExplicitlySharedDirs.forEach(dir => {
+                const mappedDir = directoryMap.get(dir.id);
                 if (dir.parent_id && directoryMap.has(dir.parent_id)) {
-                    directoryMap.get(dir.parent_id).children.push(directoryMap.get(dir.id));
-                } else if (!dir.parent_id) { // Only add root directories here
-                    rootDirectories.push(directoryMap.get(dir.id));
+                    directoryMap.get(dir.parent_id).children.push(mappedDir);
+                } else if (!dir.parent_id) {
+                    rootDirectories.push(mappedDir);
                 }
             });
             
-            // Render root directories and their children
-            rootDirectories.forEach(dir => renderDirectoryRecursive(dir, directoryTreeContainer, 0));
+            rootDirectories.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => renderDirectoryRecursive(dir, directoryTreeContainer, 0));
         }
 
         function renderDirectoryRecursive(directory, parentElement, depth) {
-            const directoryElement = createDirectoryElement(directory, directory.is_shared ? '則' : '側', depth > 0);
-            if (directory.id === selectedDirectoryId) {
+            // ICON CHANGE: Using simpler text icons
+            const iconText = directory.is_shared ? '[S]' : '[F]'; // [S] for Shared, [F] for Folder
+            const canDelete = directory.user_id === currentUser.id; // Only owner can delete
+            const directoryElement = createDirectoryElement(directory, iconText, depth > 0, canDelete);
+
+            if (String(directory.id) === String(selectedDirectoryId)) { // Ensure IDs are compared as strings or numbers consistently
                  directoryElement.classList.add('active');
             }
             parentElement.appendChild(directoryElement);
 
             if (directory.children && directory.children.length > 0) {
                 const subDirectoryContainer = document.createElement('div');
-                if (depth > 0) subDirectoryContainer.classList.add('sub-directory');
-                // Sort children alphabetically by name
+                // Add sub-directory class for potential styling, ensure it's placed correctly
+                subDirectoryContainer.className = 'sub-directory';
+                subDirectoryContainer.style.marginLeft = `${depth * 15 + 15}px`; // Indent subdirectories further
+
                 directory.children.sort((a, b) => a.name.localeCompare(b.name));
                 directory.children.forEach(childDir => renderDirectoryRecursive(childDir, subDirectoryContainer, depth + 1));
-                parentElement.appendChild(subDirectoryContainer);
+                parentElement.appendChild(subDirectoryContainer); // Append after its parent element.
             }
         }
 
 
-        function createDirectoryElement(dir, iconText, isSubdirectory = false) {
+        function createDirectoryElement(dir, iconText, isSubdirectory = false, canDelete = true) {
             const item = document.createElement('div');
             item.className = 'directory-item';
-            if (isSubdirectory) item.style.paddingLeft = `${15 + (isSubdirectory ? 20 : 0)}px`; // Indent subdirectories
-            item.dataset.id = dir.id; // Store directory ID
-            item.dataset.name = dir.name; // Store directory name
+            // Removed inline style for padding, handled by .sub-directory margin if needed
+            item.dataset.id = dir.id;
+            item.dataset.name = dir.name;
 
             const nameContainer = document.createElement('div');
             nameContainer.className = 'directory-item-name-container';
-            nameContainer.onclick = () => selectDirectory(item, dir.id, dir.name);
+            nameContainer.addEventListener('click', () => selectDirectory(item, dir.id, dir.name)); // Attach listener here
 
             const icon = document.createElement('span');
             icon.className = 'directory-icon';
@@ -1048,16 +1080,16 @@
             nameContainer.appendChild(nameSpan);
             item.appendChild(nameContainer);
 
-            // Add delete button for non-special directories owned by the user
-            if (dir.id !== 'all' && dir.user_id === currentUser.id) {
+            // Add delete button for non-special directories if user has permission
+            if (dir.id !== 'all' && canDelete) {
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-folder-btn';
-                deleteBtn.innerHTML = '&times;'; // A simple 'x' for delete
+                deleteBtn.innerHTML = '&times;';
                 deleteBtn.title = `Delete folder "${dir.name}"`;
-                deleteBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent selectDirectory from firing
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     deleteFolder(dir.id, dir.name);
-                };
+                });
                 item.appendChild(deleteBtn);
             }
             return item;
@@ -1065,59 +1097,61 @@
 
 
         function updateDirectoryDropdowns() {
-            // For "Create/Edit Prompt" modal
             promptDirectorySelect.innerHTML = '';
-            // For "Create Folder" modal (parent directory)
             parentDirectorySelect.innerHTML = '<option value="">Root (No Parent)</option>';
 
-            const userDirectories = directories.filter(dir => dir.user_id === currentUser.id && !dir.is_shared);
-            const sharedDirectoriesByAnyone = directories.filter(dir => dir.is_shared);
+            const userOwnedDirs = directories.filter(dir => dir.user_id === currentUser.id);
+            const sharedByAnyone = directories.filter(dir => dir.is_shared && dir.user_id !== currentUser.id); // Explicitly shared by others
 
-            // Populate prompt directory select (can save to own or shared folders)
-            if (userDirectories.length > 0) {
+            // Populate prompt directory select
+            if (userOwnedDirs.length > 0) {
                 const myOptGroup = document.createElement('optgroup');
                 myOptGroup.label = "My Folders";
-                userDirectories.forEach(dir => {
-                    if (!dir.parent_id) { // Only top-level for now, or implement nesting
-                        const option = document.createElement('option');
-                        option.value = dir.id;
-                        option.textContent = dir.name;
-                        myOptGroup.appendChild(option);
-                    }
+                userOwnedDirs.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => {
+                     // Simple list for now, can add hierarchy later if needed
+                    const option = document.createElement('option');
+                    option.value = dir.id;
+                    option.textContent = dir.name + (dir.is_shared ? ' (Shared by me)' : '');
+                    myOptGroup.appendChild(option);
                 });
                 promptDirectorySelect.appendChild(myOptGroup);
             }
 
-            if (sharedDirectoriesByAnyone.length > 0) {
+            if (sharedByAnyone.length > 0) {
                  const sharedOptGroup = document.createElement('optgroup');
-                 sharedOptGroup.label = "Shared Folders";
-                 sharedDirectoriesByAnyone.forEach(dir => {
+                 sharedOptGroup.label = "Shared By Others";
+                 sharedByAnyone.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => {
                     const option = document.createElement('option');
                     option.value = dir.id;
-                    option.textContent = dir.name + (dir.user_id !== currentUser.id ? ` (by ${directories.find(u=>u.id === dir.user_id)?.name || 'another user'})` : '');
+                    // Find owner email if directories array includes owner_email property
+                    const owner = directories.find(d => d.id === dir.id);
+                    option.textContent = dir.name + (owner?.owner_email ? ` (by ${owner.owner_email})` : ' (Shared)');
                     sharedOptGroup.appendChild(option);
                  });
                  promptDirectorySelect.appendChild(sharedOptGroup);
             }
+            if (promptDirectorySelect.options.length === 0) {
+                promptDirectorySelect.innerHTML = '<option value="">No directories available</option>';
+            }
 
 
-            // Populate parent directory select for creating new folders (only user's own non-shared folders)
-            userDirectories.forEach(dir => {
-                 if (!dir.parent_id) { // Only allow placing new folders in root of user's own folders for simplicity
-                    const option = document.createElement('option');
-                    option.value = dir.id;
-                    option.textContent = dir.name;
-                    parentDirectorySelect.appendChild(option);
-                 }
+            // Populate parent directory select for creating new folders (only user's own folders)
+            userOwnedDirs.sort((a,b) => a.name.localeCompare(b.name)).forEach(dir => {
+                // For simplicity, only allow creating new folders in the root of user's own folders or their subfolders.
+                // This can be expanded to show hierarchy.
+                const option = document.createElement('option');
+                option.value = dir.id;
+                option.textContent = dir.name; // Could add path for subfolders: getFolderPath(dir)
+                parentDirectorySelect.appendChild(option);
             });
         }
 
         function selectDirectory(element, directoryId, directoryName) {
             document.querySelectorAll('.directory-item').forEach(item => item.classList.remove('active'));
-            if (element) element.classList.add('active'); // element might be null if called programmatically
+            if (element) element.classList.add('active');
 
-            selectedDirectoryId = directoryId;
-            currentDirectoryNameDisplay.textContent = directoryName || 'All Prompts';
+            selectedDirectoryId = directoryId; // This can be string 'all' or numeric ID
+            currentDirectoryNameDisplay.textContent = directoryName || (directoryId === 'all' ? 'All Prompts' : 'Unknown Folder');
             loadPrompts();
         }
 
@@ -1130,7 +1164,6 @@
                 if (selectedDirectoryId && selectedDirectoryId !== 'all') {
                     params.append('directory_id', selectedDirectoryId);
                 }
-                // Add search term if present
                 const searchTerm = searchInput.value.trim();
                 if (searchTerm) {
                     params.append('search', searchTerm);
@@ -1162,26 +1195,60 @@
             }
         }
 
+        // MODIFICATION: createPromptCard uses addEventListener for click actions
         function createPromptCard(prompt) {
             const card = document.createElement('div');
             card.className = 'prompt-card';
-            card.onclick = () => viewPromptDetails(prompt); // Changed from viewPrompt
 
-            const truncatedContent = prompt.content.length > 100
+            const contentArea = document.createElement('div');
+            contentArea.className = 'prompt-card-content-area';
+            contentArea.addEventListener('click', () => viewPromptDetails(prompt));
+
+            const titleH3 = document.createElement('h3');
+            titleH3.textContent = prompt.title || 'Untitled Prompt';
+            contentArea.appendChild(titleH3);
+
+            const contentP = document.createElement('p');
+            contentP.title = prompt.content; // Full content on hover
+            contentP.textContent = prompt.content.length > 100
                 ? prompt.content.substring(0, 100) + '...'
                 : prompt.content;
+            contentArea.appendChild(contentP);
+            card.appendChild(contentArea);
 
-            card.innerHTML = `
-                <h3>${prompt.title || 'Untitled Prompt'}</h3>
-                <p title="${prompt.content}">${truncatedContent}</p> <div class="prompt-meta">
-                    <span>By: ${prompt.author_email || 'Unknown'}</span>
-                    <div class="prompt-actions">
-                        <button class="prompt-action" onclick="event.stopPropagation(); copyPromptContentById(${prompt.id})">Copy</button>
-                        ${(prompt.user_id === currentUser.id || currentUser.role === 'admin') ?
-                            `<button class="prompt-action delete" onclick="event.stopPropagation(); deletePrompt(${prompt.id}, '${prompt.title}')">Delete</button>` : ''}
-                    </div>
-                </div>
-            `;
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'prompt-meta';
+
+            const authorSpan = document.createElement('span');
+            authorSpan.textContent = `By: ${prompt.author_email || 'Unknown'}`;
+            metaDiv.appendChild(authorSpan);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'prompt-actions';
+
+            const copyButton = document.createElement('button');
+            copyButton.className = 'prompt-action';
+            copyButton.textContent = 'Copy';
+            copyButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent card click
+                copyPromptContentById(prompt.id);
+            });
+            actionsDiv.appendChild(copyButton);
+
+            if (prompt.user_id === currentUser.id || currentUser.role === 'admin') {
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'prompt-action delete';
+                deleteButton.textContent = 'Delete';
+                deleteButton.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent card click
+                    deletePrompt(prompt.id, prompt.title);
+                });
+                actionsDiv.appendChild(deleteButton);
+            }
+
+            metaDiv.appendChild(actionsDiv);
+            card.appendChild(metaDiv);
+
             return card;
         }
         // --- Modal Management ---
@@ -1208,10 +1275,12 @@
             promptTagsInput.value = '';
             promptIsRestrictedCheckbox.checked = false;
             // Set default directory if possible
-            if (selectedDirectoryId && selectedDirectoryId !== 'all') {
+            if (selectedDirectoryId && selectedDirectoryId !== 'all' && promptDirectorySelect.querySelector(`option[value="${selectedDirectoryId}"]`)) {
                 promptDirectorySelect.value = selectedDirectoryId;
-            } else if (promptDirectorySelect.options.length > 0) {
-                promptDirectorySelect.selectedIndex = 0; // Default to the first available directory
+            } else if (promptDirectorySelect.options.length > 0 && promptDirectorySelect.options[0].value) {
+                promptDirectorySelect.value = promptDirectorySelect.options[0].value; // Default to the first available directory
+            } else {
+                // Handle case where no directories might be available, or add a placeholder
             }
             openModal('promptModal');
         }
@@ -1276,7 +1345,7 @@
             promptIdInput.value = currentEditingPrompt.id;
             promptTitleInput.value = currentEditingPrompt.title;
             promptContentInput.value = currentEditingPrompt.content;
-            promptDirectorySelect.value = currentEditingPrompt.directory_id;
+            promptDirectorySelect.value = currentEditingPrompt.directory_id; // Make sure this value exists in select
             promptTagsInput.value = currentEditingPrompt.tags ? currentEditingPrompt.tags.join(', ') : '';
             promptIsRestrictedCheckbox.checked = currentEditingPrompt.is_restricted || false;
             openModal('promptModal');
@@ -1334,7 +1403,6 @@
         }
 
         async function deletePrompt(promptId, promptTitle) {
-            // Replace standard confirm with custom modal if desired, for now using confirm
             if (window.confirm(`Are you sure you want to delete the prompt "${promptTitle || 'this prompt'}"? This action cannot be undone.`)) {
                 try {
                     const response = await apiCall(`${API_BASE_URL}/api/prompts/${promptId}`, { method: 'DELETE' });
@@ -1355,7 +1423,6 @@
         function showNewFolderModal() {
             folderNameInput.value = '';
             folderIsSharedCheckbox.checked = false;
-            // Set parent directory dropdown, default to no parent
             if (parentDirectorySelect.options.length > 0) {
                  parentDirectorySelect.selectedIndex = 0;
             }
@@ -1380,7 +1447,7 @@
                     const errorData = await response.json();
                     throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
-                await loadDirectories(); // Refresh directory tree
+                await loadDirectories();
                 closeModal('newFolderModal');
                 showCustomAlert('Folder created successfully!', 'Success');
             } catch (error) {
@@ -1397,12 +1464,12 @@
                         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                     }
                     showCustomAlert(`Folder "${folderName}" deleted successfully.`, 'Success');
-                    // If the deleted folder was selected, select "All Prompts"
-                    if (selectedDirectoryId === folderId) {
-                        selectDirectory(null, 'all', 'All Prompts');
+                    if (String(selectedDirectoryId) === String(folderId)) { // Compare consistently
+                        const allPromptsElement = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
+                        selectDirectory(allPromptsElement, 'all', 'All Prompts');
                     }
-                    await loadDirectories(); // Refresh tree
-                    await loadPrompts(); // Refresh prompts as current view might change
+                    await loadDirectories();
+                    await loadPrompts();
                 } catch (error) {
                     console.error('Error deleting folder:', error);
                     showCustomAlert(`Error deleting folder: ${error.message}`, 'Error');
@@ -1427,7 +1494,6 @@
         function toggleSidebar() {
             sidebar.classList.toggle('open');
         }
-        // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
             if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
                 const isClickInsideSidebar = sidebar.contains(event.target);
@@ -1442,14 +1508,19 @@
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             checkSession();
-            // Close modals when clicking on the backdrop
             document.querySelectorAll('.modal').forEach(modal => {
                 modal.addEventListener('click', (event) => {
-                    if (event.target === modal) { // Clicked on backdrop
+                    if (event.target === modal) {
                         closeModal(modal.id);
                     }
                 });
             });
+            // Initialize the "All Prompts" directory item's click listener
+            const allPromptsStaticItem = directoryTreeContainer.querySelector('.directory-item[data-id="all"]');
+            if (allPromptsStaticItem) {
+                 allPromptsStaticItem.addEventListener('click', () => selectDirectory(allPromptsStaticItem, 'all', 'All Prompts'));
+            }
+
         });
 
     </script>
