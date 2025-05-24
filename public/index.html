@@ -498,6 +498,12 @@
             transform: translateY(-2px);
         }
 
+        .loading-message {
+            padding: 20px;
+            text-align: center;
+            color: #999;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -535,6 +541,9 @@
                 </div>
                 <button type="submit" class="login-btn">Login</button>
             </form>
+            <p style="margin-top: 20px; text-align: center; color: #666; font-size: 14px;">
+                First time? Just enter any email and password to create an account
+            </p>
         </div>
     </div>
 
@@ -583,7 +592,7 @@
                 <input type="text" placeholder="Search prompts..." id="searchInput" onkeyup="searchPrompts()">
             </div>
             <div class="prompt-grid" id="promptGrid">
-                <!-- Prompt cards will be dynamically added here -->
+                <div class="loading-message">Loading prompts...</div>
             </div>
         </div>
     </div>
@@ -599,8 +608,8 @@
                 <input type="text" id="promptTitle" placeholder="Prompt Title">
                 <textarea id="promptContent" placeholder="Enter your prompt here..."></textarea>
                 <select id="promptDirectory">
-                    <option value="my-prompts">My Prompts</option>
-                    <option value="shared">Shared Prompts</option>
+                    <option value="1">My Prompts</option>
+                    <option value="2">Shared Prompts</option>
                 </select>
                 <input type="text" id="promptTags" placeholder="Tags (comma separated)">
             </div>
@@ -621,9 +630,9 @@
             <div class="modal-body">
                 <input type="text" id="folderName" placeholder="Folder Name">
                 <select id="parentDirectory">
-                    <option value="root">Root Directory</option>
-                    <option value="my-prompts">My Prompts</option>
-                    <option value="shared">Shared Prompts</option>
+                    <option value="">Root Directory</option>
+                    <option value="1">My Prompts</option>
+                    <option value="2">Shared Prompts</option>
                 </select>
             </div>
             <div class="modal-footer">
@@ -654,83 +663,47 @@
     </div>
 
     <script>
-        // In-memory storage (in production, this would be a proper database)
+        // Global variables
         let currentUser = null;
         let prompts = [];
         let directories = [];
         let currentDirectory = 'all';
+        let authToken = null;
 
-        // Initialize demo data
-        function initializeDemoData() {
-            prompts = [
-                {
-                    id: 1,
-                    title: "Code Review Assistant",
-                    content: "You are a senior software engineer conducting a code review. Please analyze the following code for potential issues, best practices, and suggest improvements...",
-                    directory: "shared",
-                    tags: ["coding", "review"],
-                    author: "admin@company.com",
-                    createdAt: new Date().toISOString(),
-                    restricted: false
-                },
-                {
-                    id: 2,
-                    title: "Marketing Copy Generator",
-                    content: "Create compelling marketing copy for our product. Focus on benefits, unique selling points, and call-to-action...",
-                    directory: "shared",
-                    tags: ["marketing", "copywriting"],
-                    author: "marketing@company.com",
-                    createdAt: new Date().toISOString(),
-                    restricted: false
-                },
-                {
-                    id: 3,
-                    title: "Technical Documentation",
-                    content: "Write clear and comprehensive technical documentation for the following feature/API...",
-                    directory: "my-prompts",
-                    tags: ["documentation", "technical"],
-                    author: "user@company.com",
-                    createdAt: new Date().toISOString(),
-                    restricted: false
-                }
-            ];
+        // Helper function to make authenticated API calls
+        async function apiCall(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+            
+            if (!response.ok && response.status === 401) {
+                // Token expired or invalid
+                logout();
+                throw new Error('Session expired');
+            }
+            
+            return response;
         }
 
-// Login functionality
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    
-    try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, password })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            currentUser = {
-                email: data.user.email,
-                role: data.user.role,
-                token: data.token
-            };
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
+        // Login functionality
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
             
-            document.getElementById('userEmail').textContent = email;
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('appContainer').style.display = 'flex';
-            initializeDemoData();
-            loadPrompts();
-        } else {
-            // First time? Try to register
-            if (data.error === 'Invalid credentials') {
-                const registerResponse = await fetch('/api/register', {
+            try {
+                // Try to login first
+                const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -738,40 +711,105 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
                     body: JSON.stringify({ email, password })
                 });
                 
-                if (registerResponse.ok) {
-                    // Now login with the new account
-                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Login successful
+                    authToken = data.token;
+                    currentUser = data.user;
+                    
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    document.getElementById('userEmail').textContent = email;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('appContainer').style.display = 'flex';
+                    
+                    // Load user data
+                    await loadDirectories();
+                    await loadPrompts();
                 } else {
-                    alert('Login failed. Please check your credentials.');
+                    // If login fails, try to register
+                    const registerResponse = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    if (registerResponse.ok) {
+                        // Registration successful, now login
+                        const loginResponse = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ email, password })
+                        });
+                        
+                        const loginData = await loginResponse.json();
+                        
+                        if (loginResponse.ok) {
+                            authToken = loginData.token;
+                            currentUser = loginData.user;
+                            
+                            localStorage.setItem('token', loginData.token);
+                            localStorage.setItem('user', JSON.stringify(loginData.user));
+                            
+                            document.getElementById('userEmail').textContent = email;
+                            document.getElementById('loginScreen').style.display = 'none';
+                            document.getElementById('appContainer').style.display = 'flex';
+                            
+                            await loadDirectories();
+                            await loadPrompts();
+                        }
+                    } else {
+                        alert('Login failed. Please check your credentials.');
+                    }
                 }
-            } else {
-                alert(data.error || 'Login failed');
-            }
-        }
-    } catch (error) {
-        console.error('Login error:', error);
-        alert('Connection error. Please try again.');
-    }
-});
-                currentUser = {
-                    email: email,
-                    role: email.includes('admin') ? 'admin' : 'user'
-                };
-                document.getElementById('userEmail').textContent = email;
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'flex';
-                initializeDemoData();
-                loadPrompts();
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Connection error. Please try again.');
             }
         });
 
         // Logout functionality
         function logout() {
             currentUser = null;
+            authToken = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
             document.getElementById('loginScreen').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('email').value = '';
             document.getElementById('password').value = '';
+        }
+
+        // Load directories
+        async function loadDirectories() {
+            try {
+                const response = await apiCall('/api/directories');
+                directories = await response.json();
+                
+                // Update directory dropdowns
+                updateDirectoryDropdowns();
+            } catch (error) {
+                console.error('Error loading directories:', error);
+            }
+        }
+
+        // Update directory dropdowns
+        function updateDirectoryDropdowns() {
+            const promptDirSelect = document.getElementById('promptDirectory');
+            promptDirSelect.innerHTML = '';
+            
+            directories.forEach(dir => {
+                const option = document.createElement('option');
+                option.value = dir.id;
+                option.textContent = dir.name;
+                promptDirSelect.appendChild(option);
+            });
         }
 
         // Directory selection
@@ -796,23 +834,41 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         }
 
         // Load prompts based on current directory
-        function loadPrompts() {
+        async function loadPrompts() {
             const promptGrid = document.getElementById('promptGrid');
-            promptGrid.innerHTML = '';
+            promptGrid.innerHTML = '<div class="loading-message">Loading prompts...</div>';
             
-            let filteredPrompts = prompts;
-            if (currentDirectory !== 'all') {
+            try {
+                let url = '/api/prompts';
+                const params = new URLSearchParams();
+                
                 if (currentDirectory === 'my-prompts') {
-                    filteredPrompts = prompts.filter(p => p.author === currentUser.email);
-                } else {
-                    filteredPrompts = prompts.filter(p => p.directory === currentDirectory);
+                    params.append('user_only', 'true');
+                } else if (currentDirectory === 'shared') {
+                    params.append('directory', 'Shared Prompts');
                 }
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                const response = await apiCall(url);
+                prompts = await response.json();
+                
+                promptGrid.innerHTML = '';
+                
+                if (prompts.length === 0) {
+                    promptGrid.innerHTML = '<div class="loading-message">No prompts found. Create your first prompt!</div>';
+                } else {
+                    prompts.forEach(prompt => {
+                        const card = createPromptCard(prompt);
+                        promptGrid.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading prompts:', error);
+                promptGrid.innerHTML = '<div class="loading-message">Error loading prompts. Please try again.</div>';
             }
-            
-            filteredPrompts.forEach(prompt => {
-                const card = createPromptCard(prompt);
-                promptGrid.appendChild(card);
-            });
         }
 
         // Create prompt card element
@@ -829,10 +885,10 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
                 <h3>${prompt.title}</h3>
                 <p>${truncatedContent}</p>
                 <div class="prompt-meta">
-                    <span>${new Date(prompt.createdAt).toLocaleDateString()}</span>
+                    <span>${new Date(prompt.created_at).toLocaleDateString()}</span>
                     <div class="prompt-actions">
                         <button class="prompt-action" onclick="event.stopPropagation(); copyPromptDirect(${prompt.id})">Copy</button>
-                        ${prompt.author === currentUser.email || currentUser.role === 'admin' ? 
+                        ${prompt.user_id === currentUser.id || currentUser.role === 'admin' ? 
                             `<button class="prompt-action" onclick="event.stopPropagation(); deletePrompt(${prompt.id})">Delete</button>` : ''}
                     </div>
                 </div>
@@ -855,32 +911,42 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         }
 
         // Save new prompt
-        function savePrompt() {
+        async function savePrompt() {
             const title = document.getElementById('promptTitle').value;
             const content = document.getElementById('promptContent').value;
-            const directory = document.getElementById('promptDirectory').value;
-            const tags = document.getElementById('promptTags').value.split(',').map(tag => tag.trim());
+            const directory_id = document.getElementById('promptDirectory').value;
+            const tags = document.getElementById('promptTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
             
             if (title && content) {
-                const newPrompt = {
-                    id: prompts.length + 1,
-                    title: title,
-                    content: content,
-                    directory: directory,
-                    tags: tags,
-                    author: currentUser.email,
-                    createdAt: new Date().toISOString(),
-                    restricted: false
-                };
-                
-                prompts.push(newPrompt);
-                loadPrompts();
-                closeModal('newPromptModal');
-                
-                // Clear form
-                document.getElementById('promptTitle').value = '';
-                document.getElementById('promptContent').value = '';
-                document.getElementById('promptTags').value = '';
+                try {
+                    const response = await apiCall('/api/prompts', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            title,
+                            content,
+                            directory_id: parseInt(directory_id),
+                            tags
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await loadPrompts();
+                        closeModal('newPromptModal');
+                        
+                        // Clear form
+                        document.getElementById('promptTitle').value = '';
+                        document.getElementById('promptContent').value = '';
+                        document.getElementById('promptTags').value = '';
+                    } else {
+                        const error = await response.json();
+                        alert('Error saving prompt: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error saving prompt:', error);
+                    alert('Error saving prompt. Please try again.');
+                }
+            } else {
+                alert('Please enter both title and content');
             }
         }
 
@@ -889,7 +955,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             document.getElementById('viewPromptTitle').textContent = prompt.title;
             document.getElementById('viewPromptContent').value = prompt.content;
             document.getElementById('viewPromptMeta').textContent = 
-                `Created by ${prompt.author} on ${new Date(prompt.createdAt).toLocaleDateString()}`;
+                `Created by ${prompt.author_email} on ${new Date(prompt.created_at).toLocaleDateString()}`;
             document.getElementById('viewPromptModal').style.display = 'block';
             
             // Store current prompt for edit functionality
@@ -901,6 +967,16 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             const content = document.getElementById('viewPromptContent').value;
             navigator.clipboard.writeText(content).then(() => {
                 alert('Prompt copied to clipboard!');
+            }).catch(err => {
+                console.error('Error copying to clipboard:', err);
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = content;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Prompt copied to clipboard!');
             });
         }
 
@@ -909,15 +985,37 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             if (prompt) {
                 navigator.clipboard.writeText(prompt.content).then(() => {
                     alert('Prompt copied to clipboard!');
+                }).catch(err => {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = prompt.content;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('Prompt copied to clipboard!');
                 });
             }
         }
 
         // Delete prompt
-        function deletePrompt(promptId) {
+        async function deletePrompt(promptId) {
             if (confirm('Are you sure you want to delete this prompt?')) {
-                prompts = prompts.filter(p => p.id !== promptId);
-                loadPrompts();
+                try {
+                    const response = await apiCall(`/api/prompts/${promptId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        await loadPrompts();
+                    } else {
+                        const error = await response.json();
+                        alert('Error deleting prompt: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error deleting prompt:', error);
+                    alert('Error deleting prompt. Please try again.');
+                }
             }
         }
 
@@ -938,17 +1036,86 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             });
         }
 
-        // Edit prompt (placeholder)
-        function editPrompt() {
-            alert('Edit functionality would be implemented here');
+        // Edit prompt
+        async function editPrompt() {
+            const prompt = window.currentViewingPrompt;
+            if (!prompt) return;
+            
+            // Close view modal
+            closeModal('viewPromptModal');
+            
+            // Open new prompt modal with existing data
+            document.getElementById('promptTitle').value = prompt.title;
+            document.getElementById('promptContent').value = prompt.content;
+            document.getElementById('promptTags').value = prompt.tags ? prompt.tags.join(', ') : '';
+            
+            // Change the save button to update
+            const saveBtn = document.querySelector('#newPromptModal .modal-btn.primary');
+            saveBtn.textContent = 'Update Prompt';
+            saveBtn.onclick = async () => {
+                const title = document.getElementById('promptTitle').value;
+                const content = document.getElementById('promptContent').value;
+                const tags = document.getElementById('promptTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                if (title && content) {
+                    try {
+                        const response = await apiCall(`/api/prompts/${prompt.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ title, content, tags })
+                        });
+                        
+                        if (response.ok) {
+                            await loadPrompts();
+                            closeModal('newPromptModal');
+                            
+                            // Reset form and button
+                            document.getElementById('promptTitle').value = '';
+                            document.getElementById('promptContent').value = '';
+                            document.getElementById('promptTags').value = '';
+                            saveBtn.textContent = 'Save Prompt';
+                            saveBtn.onclick = savePrompt;
+                        } else {
+                            const error = await response.json();
+                            alert('Error updating prompt: ' + (error.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('Error updating prompt:', error);
+                        alert('Error updating prompt. Please try again.');
+                    }
+                }
+            };
+            
+            showNewPromptModal();
         }
 
-        // Create folder (placeholder)
-        function createFolder() {
+        // Create folder
+        async function createFolder() {
             const folderName = document.getElementById('folderName').value;
+            const parentId = document.getElementById('parentDirectory').value;
+            
             if (folderName) {
-                alert(`Folder "${folderName}" would be created here`);
-                closeModal('newFolderModal');
+                try {
+                    const response = await apiCall('/api/directories', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            name: folderName,
+                            parent_id: parentId || null,
+                            is_shared: false
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await loadDirectories();
+                        closeModal('newFolderModal');
+                        document.getElementById('folderName').value = '';
+                    } else {
+                        const error = await response.json();
+                        alert('Error creating folder: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error creating folder:', error);
+                    alert('Error creating folder. Please try again.');
+                }
             }
         }
 
@@ -959,12 +1126,34 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             }
         }
 
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if already logged in (in production, this would check session)
-            if (currentUser) {
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'flex';
+        // Check for existing session on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            const savedToken = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+            
+            if (savedToken && savedUser) {
+                try {
+                    authToken = savedToken;
+                    currentUser = JSON.parse(savedUser);
+                    
+                    // Verify token is still valid
+                    const response = await apiCall('/api/directories');
+                    
+                    if (response.ok) {
+                        document.getElementById('userEmail').textContent = currentUser.email;
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('appContainer').style.display = 'flex';
+                        
+                        directories = await response.json();
+                        updateDirectoryDropdowns();
+                        await loadPrompts();
+                    }
+                } catch (error) {
+                    // Token invalid, show login
+                    logout();
+                }
             }
         });
-    </script
+    </script>
+</body>
+</html>
